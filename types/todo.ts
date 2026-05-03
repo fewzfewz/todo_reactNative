@@ -7,6 +7,13 @@ export type Todo = {
   title: string;
   notes: string;
   priority: TodoPriority;
+  tags: string[];
+  project: string;
+  repeat: "none" | "daily" | "weekly" | "monthly";
+  archived: boolean;
+  archivedAt: string | null;
+  reminderAt: string | null;
+  notificationId: string | null;
   completed: boolean;
   completedAt: string | null;
   dueDate: string | null;
@@ -18,5 +25,9 @@ export type TodoDraft = {
   title: string;
   notes: string;
   priority: TodoPriority;
+  tags: string;
+  project: string;
+  repeat: "none" | "daily" | "weekly" | "monthly";
+  reminderAt: string;
   dueDate: string | null;
 };

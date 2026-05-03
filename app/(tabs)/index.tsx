@@ -19,7 +19,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import useTheme from "@/hooks/useTheme";
 import { useTodos } from "@/hooks/useTodos";
 import { Todo, TodoDraft, TodoFilter, TodoPriority } from "@/types/todo";
-import { addDays, getDueStatus, isValidDateInput } from "@/utils/date";
+import { addDays, getDueStatus, isValidDateInput, parseReminderInput, toReminderInput } from "@/utils/date";
 import Animated, {
   FadeInDown,
   interpolate,
@@ -28,37 +28,70 @@ import Animated, {
   withRepeat,
   withTiming,
 } from "react-native-reanimated";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const priorities: TodoPriority[] = ["low", "medium", "high"];
-const filters: TodoFilter[] = ["all", "active", "completed"];
 
 const emptyDraft: TodoDraft = {
   title: "",
   notes: "",
   priority: "medium",
+  tags: "",
+  project: "Personal",
+  repeat: "none",
+  reminderAt: "",
   dueDate: null,
 };
 
 export default function Index() {
   const { colors } = useTheme();
-  const { todos, stats, isLoading, addTodo, updateTodo, toggleTodo, deleteTodo } = useTodos();
-  const [filter, setFilter] = useState<TodoFilter>("all");
+  const {
+    todos,
+    stats,
+    isLoading,
+    addTodo,
+    updateTodo,
+    toggleTodo,
+    deleteTodo,
+    archiveTodo,
+    undoLastTodoAction,
+    lastAction,
+  } = useTodos();
+  const [filter, setFilter] = useState<TodoFilter | "archived">("all");
   const [query, setQuery] = useState("");
+  const [quickTitle, setQuickTitle] = useState("");
   const [modalVisible, setModalVisible] = useState(false);
   const [editingTodo, setEditingTodo] = useState<Todo | null>(null);
   const [draft, setDraft] = useState<TodoDraft>(emptyDraft);
   const [dateInput, setDateInput] = useState("");
+  const [showOnboarding, setShowOnboarding] = useState(false);
+
+  useEffect(() => {
+    AsyncStorage.getItem("planner:onboarded:v1").then((value) => {
+      if (!value) {
+        setShowOnboarding(true);
+      }
+    });
+  }, []);
 
   const filteredTodos = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
 
     return todos.filter((todo) => {
       const matchesFilter =
-        filter === "all" || (filter === "active" ? !todo.completed : todo.completed);
+        filter === "all"
+          ? !todo.archived
+          : filter === "active"
+            ? !todo.completed && !todo.archived
+            : filter === "completed"
+              ? todo.completed && !todo.archived
+              : todo.archived;
       const matchesQuery =
         !normalizedQuery ||
         todo.title.toLowerCase().includes(normalizedQuery) ||
-        todo.notes.toLowerCase().includes(normalizedQuery);
+        todo.notes.toLowerCase().includes(normalizedQuery) ||
+        todo.tags.join(" ").toLowerCase().includes(normalizedQuery) ||
+        todo.project.toLowerCase().includes(normalizedQuery);
 
       return matchesFilter && matchesQuery;
     });
@@ -77,6 +110,10 @@ export default function Index() {
       title: todo.title,
       notes: todo.notes,
       priority: todo.priority,
+      tags: todo.tags.join(", "),
+      project: todo.project,
+      repeat: todo.repeat,
+      reminderAt: toReminderInput(todo.reminderAt),
       dueDate: todo.dueDate,
     });
     setDateInput(todo.dueDate ?? "");
@@ -104,7 +141,16 @@ export default function Index() {
       return;
     }
 
-    const payload = { ...draft, title, dueDate: cleanDate || null };
+    if (draft.reminderAt.trim() && !parseReminderInput(draft.reminderAt)) {
+      Alert.alert("Check the reminder", "Use YYYY-MM-DD HH:MM, like 2026-05-04 18:30.");
+      return;
+    }
+
+    const payload = {
+      ...draft,
+      title,
+      dueDate: cleanDate || null,
+    };
 
     if (editingTodo) {
       updateTodo(editingTodo.id, payload);
@@ -123,6 +169,17 @@ export default function Index() {
         text: "Delete",
         style: "destructive",
         onPress: () => deleteTodo(todo.id),
+      },
+    ]);
+  };
+
+  const confirmArchive = (todo: Todo) => {
+    Alert.alert("Archive task?", todo.title, [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Archive",
+        style: "default",
+        onPress: () => archiveTodo(todo.id),
       },
     ]);
   };
@@ -148,74 +205,94 @@ export default function Index() {
             },
           ]}
         >
-        <Pressable
-          accessibilityRole="checkbox"
-          accessibilityState={{ checked: item.completed }}
-          onPress={() => {
-            toggleTodo(item.id);
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-          }}
-          style={[
-            styles.checkButton,
-            {
-              backgroundColor: item.completed ? colors.success : "transparent",
-              borderColor: item.completed ? colors.success : colors.border,
-            },
-          ]}
-        >
-          {item.completed ? <Ionicons color="#ffffff" name="checkmark" size={18} /> : null}
-        </Pressable>
+          <Pressable
+            accessibilityRole="checkbox"
+            accessibilityState={{ checked: item.completed }}
+            onPress={() => {
+              toggleTodo(item.id);
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            }}
+            style={[
+              styles.checkButton,
+              {
+                backgroundColor: item.completed ? colors.success : "transparent",
+                borderColor: item.completed ? colors.success : colors.border,
+              },
+            ]}
+          >
+            {item.completed ? <Ionicons color="#ffffff" name="checkmark" size={18} /> : null}
+          </Pressable>
 
-        <View style={styles.todoContent}>
-          <View style={styles.todoHeader}>
-            <Text
-              numberOfLines={2}
-              style={[
-                styles.todoTitle,
-                { color: colors.text, textDecorationLine: item.completed ? "line-through" : "none" },
-              ]}
-            >
-              {item.title}
-            </Text>
-            <Pressable
-              accessibilityLabel={`Delete ${item.title}`}
-              hitSlop={10}
-              onPress={() => confirmDelete(item)}
-              style={styles.iconButton}
-            >
-              <Ionicons color={colors.textMuted} name="trash-outline" size={20} />
-            </Pressable>
-          </View>
-
-          {item.notes ? (
-            <Text numberOfLines={2} style={[styles.todoNotes, { color: colors.textMuted }]}>
-              {item.notes}
-            </Text>
-          ) : null}
-
-          <View style={styles.metaRow}>
-            <View style={[styles.pill, { backgroundColor: `${priorityTone}22` }]}>
-              <View style={[styles.priorityDot, { backgroundColor: priorityTone }]} />
-              <Text style={[styles.pillText, { color: priorityTone }]}>{item.priority}</Text>
+          <View style={styles.todoContent}>
+            <View style={styles.todoHeader}>
+              <Text
+                numberOfLines={2}
+                style={[
+                  styles.todoTitle,
+                  { color: colors.text, textDecorationLine: item.completed ? "line-through" : "none" },
+                ]}
+              >
+                {item.title}
+              </Text>
+              <Pressable
+                accessibilityLabel={`Archive ${item.title}`}
+                hitSlop={10}
+                onPress={() => confirmArchive(item)}
+                style={styles.iconButton}
+              >
+                <Ionicons color={colors.textMuted} name="archive-outline" size={20} />
+              </Pressable>
+              <Pressable
+                accessibilityLabel={`Delete ${item.title}`}
+                hitSlop={10}
+                onPress={() => confirmDelete(item)}
+                style={styles.iconButton}
+              >
+                <Ionicons color={colors.textMuted} name="trash-outline" size={20} />
+              </Pressable>
             </View>
-            <View style={[styles.pill, { backgroundColor: colors.bg }]}>
-              <Ionicons
-                color={
-                  due.tone === "danger"
-                    ? colors.danger
-                    : due.tone === "warning"
-                      ? colors.warning
-                      : due.tone === "success"
-                        ? colors.success
-                        : colors.textMuted
-                }
-                name="calendar-outline"
-                size={14}
-              />
-              <Text style={[styles.pillText, { color: colors.textMuted }]}>{due.label}</Text>
+
+            {item.notes ? (
+              <Text numberOfLines={2} style={[styles.todoNotes, { color: colors.textMuted }]}>
+                {item.notes}
+              </Text>
+            ) : null}
+
+            <View style={styles.metaRow}>
+              <View style={[styles.pill, { backgroundColor: `${priorityTone}22` }]}>
+                <View style={[styles.priorityDot, { backgroundColor: priorityTone }]} />
+                <Text style={[styles.pillText, { color: priorityTone }]}>{item.priority}</Text>
+              </View>
+              <View style={[styles.pill, { backgroundColor: colors.bg }]}>
+                <Ionicons
+                  color={
+                    due.tone === "danger"
+                      ? colors.danger
+                      : due.tone === "warning"
+                        ? colors.warning
+                        : due.tone === "success"
+                          ? colors.success
+                          : colors.textMuted
+                  }
+                  name="calendar-outline"
+                  size={14}
+                />
+                <Text style={[styles.pillText, { color: colors.textMuted }]}>{due.label}</Text>
+              </View>
+              {item.project ? (
+                <View style={[styles.pill, { backgroundColor: colors.bg }]}>
+                  <Ionicons color={colors.primary} name="folder-outline" size={14} />
+                  <Text style={[styles.pillText, { color: colors.textMuted }]}>{item.project}</Text>
+                </View>
+              ) : null}
+              {item.tags.length ? (
+                <View style={[styles.pill, { backgroundColor: colors.bg }]}>
+                  <Ionicons color={colors.warning} name="pricetag-outline" size={14} />
+                  <Text style={[styles.pillText, { color: colors.textMuted }]}>{item.tags.join(", ")}</Text>
+                </View>
+              ) : null}
             </View>
           </View>
-        </View>
         </Pressable>
       </Animated.View>
     );
@@ -240,12 +317,47 @@ export default function Index() {
         </Pressable>
       </View>
 
+      <View style={[styles.quickAdd, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <Ionicons color={colors.primary} name="flash-outline" size={18} />
+        <TextInput
+          placeholder="Quick add task"
+          placeholderTextColor={colors.textMuted}
+          value={quickTitle}
+          onChangeText={setQuickTitle}
+          onSubmitEditing={() => {
+            if (!quickTitle.trim()) return;
+            addTodo({
+              ...emptyDraft,
+              title: quickTitle.trim(),
+              project: "Personal",
+            });
+            setQuickTitle("");
+          }}
+          style={[styles.quickInput, { color: colors.text }]}
+        />
+        <Pressable
+          onPress={() => {
+            if (!quickTitle.trim()) return;
+            addTodo({
+              ...emptyDraft,
+              title: quickTitle.trim(),
+              project: "Personal",
+            });
+            setQuickTitle("");
+          }}
+          style={({ pressed }) => [styles.quickButton, { backgroundColor: colors.primary, opacity: pressed ? 0.88 : 1 }]}
+        >
+          <Ionicons color="#ffffff" name="add" size={18} />
+        </Pressable>
+      </View>
+
       <FocusDeck colors={colors} stats={stats} />
 
       <View style={styles.statsRow}>
         <Stat label="Active" value={stats.active} color={colors.primary} />
         <Stat label="Done" value={stats.completed} color={colors.success} />
         <Stat label="Urgent" value={stats.highPriority} color={colors.danger} />
+        <Stat label="Archived" value={stats.archived} color={colors.textMuted} />
       </View>
 
       <View style={[styles.searchBox, { backgroundColor: colors.surface, borderColor: colors.border }]}>
@@ -265,7 +377,7 @@ export default function Index() {
       </View>
 
       <View style={[styles.segmented, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-        {filters.map((item) => (
+        {(["all", "active", "completed", "archived"] as const).map((item) => (
           <Pressable
             key={item}
             onPress={() => setFilter(item)}
@@ -285,6 +397,15 @@ export default function Index() {
           </Pressable>
         ))}
       </View>
+
+      {lastAction ? (
+        <View style={[styles.undoBanner, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <Text style={[styles.undoText, { color: colors.text }]}>Action saved</Text>
+          <Pressable onPress={undoLastTodoAction} style={styles.undoButton}>
+            <Text style={[styles.undoButtonText, { color: colors.primary }]}>Undo</Text>
+          </Pressable>
+        </View>
+      ) : null}
 
       <FlatList
         data={filteredTodos}
@@ -346,6 +467,27 @@ export default function Index() {
                 ]}
               />
 
+              <TextInput
+                placeholder="Project"
+                placeholderTextColor={colors.textMuted}
+                value={draft.project}
+                onChangeText={(project) => setDraft((current) => ({ ...current, project }))}
+                style={[
+                  styles.input,
+                  { backgroundColor: colors.backgrounds.input, borderColor: colors.border, color: colors.text },
+                ]}
+              />
+              <TextInput
+                placeholder="Tags, comma separated"
+                placeholderTextColor={colors.textMuted}
+                value={draft.tags}
+                onChangeText={(tags) => setDraft((current) => ({ ...current, tags }))}
+                style={[
+                  styles.input,
+                  { backgroundColor: colors.backgrounds.input, borderColor: colors.border, color: colors.text },
+                ]}
+              />
+
               <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>Priority</Text>
               <View style={styles.choiceRow}>
                 {priorities.map((priority) => (
@@ -372,6 +514,32 @@ export default function Index() {
                 ))}
               </View>
 
+              <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>Repeat</Text>
+              <View style={styles.choiceRow}>
+                {(["none", "daily", "weekly", "monthly"] as const).map((repeat) => (
+                  <Pressable
+                    key={repeat}
+                    onPress={() => setDraft((current) => ({ ...current, repeat }))}
+                    style={[
+                      styles.choice,
+                      {
+                        backgroundColor: draft.repeat === repeat ? colors.primary : colors.bg,
+                        borderColor: colors.border,
+                      },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.choiceText,
+                        { color: draft.repeat === repeat ? "#ffffff" : colors.text },
+                      ]}
+                    >
+                      {repeat}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+
               <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>Due date</Text>
               <TextInput
                 placeholder="YYYY-MM-DD"
@@ -389,6 +557,18 @@ export default function Index() {
                 <DateChip label="No date" onPress={() => setDateInput("")} />
               </View>
 
+              <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>Reminder</Text>
+              <TextInput
+                placeholder="YYYY-MM-DD HH:MM"
+                placeholderTextColor={colors.textMuted}
+                value={draft.reminderAt}
+                onChangeText={(reminderAt) => setDraft((current) => ({ ...current, reminderAt }))}
+                style={[
+                  styles.input,
+                  { backgroundColor: colors.backgrounds.input, borderColor: colors.border, color: colors.text },
+                ]}
+              />
+
               <Pressable
                 onPress={submitDraft}
                 style={({ pressed }) => [
@@ -403,7 +583,49 @@ export default function Index() {
           </View>
         </KeyboardAvoidingView>
       </Modal>
+
+      <Modal animationType="fade" transparent visible={showOnboarding} onRequestClose={() => setShowOnboarding(false)}>
+        <View style={styles.onboardingOverlay}>
+          <View style={[styles.onboardingCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <Text style={[styles.onboardingTitle, { color: colors.text }]}>Welcome to Focus List</Text>
+            <Text style={[styles.onboardingBody, { color: colors.textMuted }]}>
+              Keep tasks, habits, and your daily tracker in one local-first place.
+            </Text>
+            <View style={styles.onboardingList}>
+              <OnboardingRow label="Todos" detail="Priorities, projects, tags, recurrence, and reminders." />
+              <OnboardingRow label="Habits" detail="Daily check-ins, streaks, and weekly targets." />
+              <OnboardingRow label="Tracker" detail="A GitHub-style board for the life of your app." />
+            </View>
+            <Pressable
+              onPress={async () => {
+                await AsyncStorage.setItem("planner:onboarded:v1", "yes");
+                setShowOnboarding(false);
+              }}
+              style={({ pressed }) => [
+                styles.onboardingButton,
+                { backgroundColor: colors.primary, opacity: pressed ? 0.88 : 1 },
+              ]}
+            >
+              <Text style={styles.onboardingButtonText}>Start planning</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
+  );
+}
+
+function OnboardingRow({ label, detail }: { label: string; detail: string }) {
+  const { colors } = useTheme();
+
+  return (
+    <View style={styles.onboardingRow}>
+      <View style={[styles.onboardingDot, { backgroundColor: colors.primary }]} />
+      <View style={{ flex: 1 }}>
+        <Text style={[styles.onboardingRowLabel, { color: colors.text }]}>{label}</Text>
+        <Text style={[styles.onboardingRowDetail, { color: colors.textMuted }]}>{detail}</Text>
+      </View>
+    </View>
   );
 }
 
@@ -566,7 +788,8 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 10,
     paddingHorizontal: 20,
-    paddingTop: 18,
+    paddingTop: 14,
+    flexWrap: "wrap",
   },
   stat: {
     borderRadius: 8,
@@ -594,6 +817,28 @@ const styles = StyleSheet.create({
     marginHorizontal: 20,
     marginTop: 18,
     paddingHorizontal: 14,
+  },
+  quickAdd: {
+    alignItems: "center",
+    borderRadius: 8,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: 10,
+    marginHorizontal: 20,
+    marginTop: 14,
+    paddingHorizontal: 14,
+  },
+  quickInput: {
+    flex: 1,
+    fontSize: 16,
+    minHeight: 48,
+  },
+  quickButton: {
+    alignItems: "center",
+    borderRadius: 12,
+    height: 36,
+    justifyContent: "center",
+    width: 36,
   },
   searchInput: {
     flex: 1,
@@ -796,6 +1041,85 @@ const styles = StyleSheet.create({
   saveButtonText: {
     color: "#ffffff",
     fontSize: 16,
+    fontWeight: "800",
+  },
+  onboardingOverlay: {
+    alignItems: "center",
+    backgroundColor: "rgba(0,0,0,0.45)",
+    flex: 1,
+    justifyContent: "center",
+    padding: 20,
+  },
+  onboardingCard: {
+    borderRadius: 12,
+    borderWidth: 1,
+    padding: 20,
+    width: "100%",
+  },
+  onboardingTitle: {
+    fontSize: 24,
+    fontWeight: "800",
+  },
+  onboardingBody: {
+    fontSize: 14,
+    lineHeight: 20,
+    marginTop: 8,
+  },
+  onboardingList: {
+    gap: 12,
+    marginTop: 16,
+  },
+  onboardingRow: {
+    flexDirection: "row",
+    gap: 10,
+  },
+  onboardingDot: {
+    borderRadius: 999,
+    height: 10,
+    marginTop: 5,
+    width: 10,
+  },
+  onboardingRowLabel: {
+    fontSize: 15,
+    fontWeight: "800",
+  },
+  onboardingRowDetail: {
+    fontSize: 13,
+    lineHeight: 18,
+    marginTop: 2,
+  },
+  onboardingButton: {
+    alignItems: "center",
+    borderRadius: 8,
+    marginTop: 18,
+    paddingVertical: 14,
+  },
+  onboardingButtonText: {
+    color: "#ffffff",
+    fontSize: 15,
+    fontWeight: "800",
+  },
+  undoBanner: {
+    alignItems: "center",
+    borderRadius: 8,
+    borderWidth: 1,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginHorizontal: 20,
+    marginTop: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  undoText: {
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  undoButton: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  undoButtonText: {
+    fontSize: 14,
     fontWeight: "800",
   },
   focusDeck: {

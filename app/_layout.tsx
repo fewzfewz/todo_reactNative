@@ -1,7 +1,10 @@
 import { ThemeProvider } from "@/hooks/useTheme";
 import { HabitProvider } from "@/hooks/useHabits";
 import { TodoProvider } from "@/hooks/useTodos";
+import { configureNotifications } from "@/utils/reminders";
 import { Stack } from "expo-router";
+
+configureNotifications();
 
 export default function RootLayout() {
   return (

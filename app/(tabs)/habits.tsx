@@ -19,11 +19,14 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import useTheme from "@/hooks/useTheme";
 import { useHabits } from "@/hooks/useHabits";
 import { Habit, HabitDraft } from "@/types/habit";
+import { parseReminderInput, toReminderInput } from "@/utils/date";
 
 const starterDraft: HabitDraft = {
   title: "",
   notes: "",
   color: "#3b82f6",
+  goalPerWeek: 7,
+  reminderAt: "",
 };
 
 const colorOptions = ["#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#14b8a6"];
@@ -52,7 +55,18 @@ const countStreak = (checkIns: string[]) => {
 
 export default function HabitsScreen() {
   const { colors } = useTheme();
-  const { habits, stats, isLoading, addHabit, updateHabit, deleteHabit, toggleCheckIn } = useHabits();
+  const {
+    habits,
+    stats,
+    isLoading,
+    addHabit,
+    updateHabit,
+    deleteHabit,
+    archiveHabit,
+    undoLastHabitAction,
+    lastAction,
+    toggleCheckIn,
+  } = useHabits();
   const [modalVisible, setModalVisible] = useState(false);
   const [editingHabit, setEditingHabit] = useState<Habit | null>(null);
   const [draft, setDraft] = useState<HabitDraft>(starterDraft);
@@ -75,6 +89,8 @@ export default function HabitsScreen() {
       title: habit.title,
       notes: habit.notes,
       color: habit.color,
+      goalPerWeek: habit.goalPerWeek,
+      reminderAt: toReminderInput(habit.reminderAt),
     });
     setModalVisible(true);
   };
@@ -84,6 +100,11 @@ export default function HabitsScreen() {
 
     if (!title) {
       Alert.alert("Add a habit", "A habit needs a title before it can be saved.");
+      return;
+    }
+
+    if (draft.reminderAt.trim() && !parseReminderInput(draft.reminderAt)) {
+      Alert.alert("Check the reminder", "Use YYYY-MM-DD HH:MM, like 2026-05-04 18:30.");
       return;
     }
 
@@ -112,7 +133,9 @@ export default function HabitsScreen() {
 
   const habitCards = useMemo(
     () =>
-      habits.map((habit) => ({
+      habits
+        .filter((habit) => !habit.archived)
+        .map((habit) => ({
         ...habit,
         streak: countStreak(habit.checkIns),
         doneToday: habit.checkIns.includes(dayKey()),
@@ -143,6 +166,7 @@ export default function HabitsScreen() {
           <Metric label="Habits" value={stats.total} color={colors.primary} />
           <Metric label="Today" value={stats.completedToday} color={colors.success} />
           <Metric label="Check-ins" value={stats.totalCheckIns} color={colors.warning} />
+          <Metric label="Archived" value={stats.archived} color={colors.textMuted} />
         </View>
 
         <View style={[styles.hero, { backgroundColor: colors.surface, borderColor: colors.border }]}>
@@ -160,6 +184,15 @@ export default function HabitsScreen() {
         {isLoading ? (
           <View style={[styles.loadingState, { borderColor: colors.border }]}>
             <Text style={[styles.loadingText, { color: colors.textMuted }]}>Loading habits</Text>
+          </View>
+        ) : null}
+
+        {lastAction ? (
+          <View style={[styles.undoBanner, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <Text style={[styles.undoText, { color: colors.text }]}>Action saved</Text>
+            <Pressable onPress={undoLastHabitAction} style={styles.undoButton}>
+              <Text style={[styles.undoButtonText, { color: colors.primary }]}>Undo</Text>
+            </Pressable>
           </View>
         ) : null}
 
@@ -189,6 +222,10 @@ export default function HabitsScreen() {
                   <Ionicons color={colors.success} name="calendar-outline" size={14} />
                   <Text style={[styles.pillText, { color: colors.textMuted }]}>{habit.checkIns.length} total</Text>
                 </View>
+                <View style={[styles.pill, { backgroundColor: colors.bg }]}>
+                  <Ionicons color={colors.warning} name="flag-outline" size={14} />
+                  <Text style={[styles.pillText, { color: colors.textMuted }]}>{habit.goalPerWeek}/week</Text>
+                </View>
                 <Pressable
                   onPress={() => {
                     toggleCheckIn(habit.id);
@@ -207,6 +244,12 @@ export default function HabitsScreen() {
                   <Text style={[styles.checkText, { color: habit.doneToday ? "#ffffff" : colors.text }]}>
                     {habit.doneToday ? "Done today" : "Check in"}
                   </Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => archiveHabit(habit.id)}
+                  style={[styles.archiveButton, { borderColor: colors.border, backgroundColor: colors.bg }]}
+                >
+                  <Ionicons color={colors.textMuted} name="archive-outline" size={16} />
                 </Pressable>
               </View>
             </View>
@@ -264,6 +307,20 @@ export default function HabitsScreen() {
                 ]}
               />
 
+              <TextInput
+                keyboardType="number-pad"
+                placeholder="Goal per week"
+                placeholderTextColor={colors.textMuted}
+                value={String(draft.goalPerWeek)}
+                onChangeText={(goalPerWeek) =>
+                  setDraft((current) => ({ ...current, goalPerWeek: Number(goalPerWeek) || 1 }))
+                }
+                style={[
+                  styles.input,
+                  { backgroundColor: colors.backgrounds.input, borderColor: colors.border, color: colors.text },
+                ]}
+              />
+
               <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>Color</Text>
               <View style={styles.colorRow}>
                 {colorOptions.map((color) => (
@@ -280,6 +337,18 @@ export default function HabitsScreen() {
                   />
                 ))}
               </View>
+
+              <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>Reminder</Text>
+              <TextInput
+                placeholder="YYYY-MM-DD HH:MM"
+                placeholderTextColor={colors.textMuted}
+                value={draft.reminderAt}
+                onChangeText={(reminderAt) => setDraft((current) => ({ ...current, reminderAt }))}
+                style={[
+                  styles.input,
+                  { backgroundColor: colors.backgrounds.input, borderColor: colors.border, color: colors.text },
+                ]}
+              />
 
               <Pressable onPress={submit} style={({ pressed }) => [styles.saveButton, { backgroundColor: colors.primary, opacity: pressed ? 0.86 : 1 }]}>
                 <Ionicons color="#ffffff" name="save-outline" size={18} />
@@ -323,6 +392,19 @@ const styles = StyleSheet.create({
   metric: { borderRadius: 8, borderWidth: 1, flex: 1, padding: 14 },
   metricValue: { fontSize: 24, fontWeight: "800" },
   metricLabel: { fontSize: 12, fontWeight: "800", marginTop: 2, textTransform: "uppercase" },
+  undoBanner: {
+    alignItems: "center",
+    borderRadius: 8,
+    borderWidth: 1,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginTop: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  undoText: { fontSize: 14, fontWeight: "700" },
+  undoButton: { paddingHorizontal: 8, paddingVertical: 4 },
+  undoButtonText: { fontSize: 14, fontWeight: "800" },
   hero: { borderRadius: 8, borderWidth: 1, marginTop: 16, padding: 16 },
   heroTop: { alignItems: "center", flexDirection: "row", justifyContent: "space-between" },
   heroLabel: { fontSize: 12, fontWeight: "800", textTransform: "uppercase" },
@@ -341,6 +423,14 @@ const styles = StyleSheet.create({
   pillText: { fontSize: 12, fontWeight: "700" },
   checkButton: { alignItems: "center", borderRadius: 8, borderWidth: 1, flexDirection: "row", gap: 6, marginLeft: "auto", paddingHorizontal: 12, paddingVertical: 8 },
   checkText: { fontSize: 12, fontWeight: "800" },
+  archiveButton: {
+    alignItems: "center",
+    borderRadius: 8,
+    borderWidth: 1,
+    height: 34,
+    justifyContent: "center",
+    width: 34,
+  },
   emptyState: { alignItems: "center", borderRadius: 8, borderStyle: "dashed", borderWidth: 1, marginTop: 18, padding: 28 },
   emptyTitle: { fontSize: 18, fontWeight: "800", marginTop: 10 },
   emptyText: { fontSize: 14, lineHeight: 20, marginTop: 4, textAlign: "center" },

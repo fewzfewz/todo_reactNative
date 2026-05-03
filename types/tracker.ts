@@ -14,6 +14,9 @@ export type TrackerSummary = {
   streak: number;
   bestDay: string | null;
   bestDayCount: number;
+  bestStreak: number;
+  busiestDay: string | null;
+  busiestDayCount: number;
 };
 
 export type TrackerLogItem = {

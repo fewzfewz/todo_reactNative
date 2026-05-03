@@ -29,7 +29,7 @@ const TabsLayout = () => {
       <Tabs.Screen
         name="index"
         options={{
-          title: "Todos",
+          title: "Planner",
           tabBarIcon: ({ color, size }) => (
             <Ionicons color={color} name="checkbox-outline" size={size} />
           ),
@@ -56,7 +56,7 @@ const TabsLayout = () => {
       <Tabs.Screen
         name="settings"
         options={{
-          title: "Settings",
+          title: "Prefs",
           tabBarIcon: ({ color, size }) => (
             <Ionicons color={color} name="settings-outline" size={size} />
           ),

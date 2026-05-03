@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
+import * as Notifications from "expo-notifications";
 import { Alert, Pressable, ScrollView, StyleSheet, Switch, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -14,6 +15,22 @@ export default function SettingsScreen() {
   const { stats, clearCompleted, resetTodos } = useTodos();
   const { stats: habitStats, resetHabits } = useHabits();
   const completionRate = stats.total ? Math.round((stats.completed / stats.total) * 100) : 0;
+
+  const requestReminderPermission = async () => {
+    const current = await Notifications.getPermissionsAsync();
+    if (current.status === "granted") {
+      Alert.alert("Reminders enabled", "This device can already show local notifications.");
+      return;
+    }
+
+    const granted = await Notifications.requestPermissionsAsync();
+    Alert.alert(
+      granted.status === "granted" ? "Reminders enabled" : "Permission not granted",
+      granted.status === "granted"
+        ? "Local reminders can now be scheduled from tasks and habits."
+        : "You can still use reminders in the app, but alerts will not be delivered until permission is granted.",
+    );
+  };
 
   const confirmClearCompleted = () => {
     if (stats.completed === 0) {
@@ -115,6 +132,14 @@ export default function SettingsScreen() {
               ]);
             }}
             sublabel="Restore the starter habits only."
+          />
+          <View style={[styles.divider, { backgroundColor: colors.border }]} />
+          <ActionRow
+            color={colors.warning}
+            icon="alarm-outline"
+            label="Enable reminders"
+            onPress={requestReminderPermission}
+            sublabel="Allow local task and habit reminders."
           />
         </View>
 

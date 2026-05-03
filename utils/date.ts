@@ -16,6 +16,12 @@ export const addDays = (days: number) => {
   return toDateInputValue(date);
 };
 
+export const addMonths = (months: number) => {
+  const date = new Date();
+  date.setMonth(date.getMonth() + months);
+  return toDateInputValue(date);
+};
+
 export const isValidDateInput = (value: string) => {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
     return false;
@@ -51,4 +57,61 @@ export const getDueStatus = (dueDate: string | null, completed: boolean) => {
   }
 
   return { label: due.toLocaleDateString(undefined, { month: "short", day: "numeric" }), tone: "muted" as const };
+};
+
+export const shiftDateByRepeat = (date: string | null, repeat: "none" | "daily" | "weekly" | "monthly") => {
+  if (!date || repeat === "none") {
+    return null;
+  }
+
+  const next = new Date(`${date}T00:00:00`);
+
+  if (repeat === "daily") {
+    next.setDate(next.getDate() + 1);
+  } else if (repeat === "weekly") {
+    next.setDate(next.getDate() + 7);
+  } else if (repeat === "monthly") {
+    next.setMonth(next.getMonth() + 1);
+  }
+
+  return toDateInputValue(next);
+};
+
+export const parseReminderInput = (value: string) => {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  const match = trimmed.match(
+    /^(\d{4}-\d{2}-\d{2})(?:[ T](\d{2}):(\d{2}))?$/,
+  );
+
+  if (!match) {
+    return null;
+  }
+
+  const [, datePart, hourPart = "08", minutePart = "00"] = match;
+  const candidate = new Date(`${datePart}T${hourPart}:${minutePart}:00`);
+
+  if (Number.isNaN(candidate.getTime())) {
+    return null;
+  }
+
+  return candidate;
+};
+
+export const toReminderInput = (date: string | null) => {
+  if (!date) {
+    return "";
+  }
+
+  const parsed = new Date(date);
+  const year = parsed.getFullYear();
+  const month = String(parsed.getMonth() + 1).padStart(2, "0");
+  const day = String(parsed.getDate()).padStart(2, "0");
+  const hour = String(parsed.getHours()).padStart(2, "0");
+  const minute = String(parsed.getMinutes()).padStart(2, "0");
+
+  return `${year}-${month}-${day} ${hour}:${minute}`;
 };

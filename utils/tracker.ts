@@ -37,6 +37,10 @@ export const buildTrackerDays = (todos: Todo[], habits: Habit[], count = 84) => 
   const days = makeDays(count);
 
   for (const todo of todos) {
+    if (todo.archived) {
+      continue;
+    }
+
     const createdIndex = dayIndex(days, toDayKey(todo.createdAt));
     if (createdIndex !== -1) {
       days[createdIndex].todoCreated += 1;
@@ -54,9 +58,8 @@ export const buildTrackerDays = (todos: Todo[], habits: Habit[], count = 84) => 
   }
 
   for (const habit of habits) {
-    const createdIndex = dayIndex(days, toDayKey(habit.createdAt));
-    if (createdIndex !== -1) {
-      days[createdIndex].todoCreated += 1;
+    if (habit.archived) {
+      continue;
     }
 
     for (const checkIn of habit.checkIns) {
@@ -70,11 +73,28 @@ export const buildTrackerDays = (todos: Todo[], habits: Habit[], count = 84) => 
   return days;
 };
 
+const findBestStreak = (days: TrackerDay[]) => {
+  let streak = 0;
+  let best = 0;
+
+  for (const day of days) {
+    const activity = day.todoCompleted + day.habitCheckIns;
+    if (activity > 0) {
+      streak += 1;
+      best = Math.max(best, streak);
+    } else {
+      streak = 0;
+    }
+  }
+
+  return best;
+};
+
 export const buildTrackerSummary = (todos: Todo[], habits: Habit[], days: TrackerDay[]): TrackerSummary => {
-  const totalTodos = todos.length;
-  const totalHabits = habits.length;
-  const totalCheckIns = habits.reduce((sum, habit) => sum + habit.checkIns.length, 0);
-  const totalCompletions = todos.filter((todo) => todo.completed).length;
+  const totalTodos = todos.filter((todo) => !todo.archived).length;
+  const totalHabits = habits.filter((habit) => !habit.archived).length;
+  const totalCheckIns = habits.filter((habit) => !habit.archived).reduce((sum, habit) => sum + habit.checkIns.length, 0);
+  const totalCompletions = todos.filter((todo) => todo.completed && !todo.archived).length;
 
   let streak = 0;
   for (let index = days.length - 1; index >= 0; index -= 1) {
@@ -86,17 +106,10 @@ export const buildTrackerSummary = (todos: Todo[], habits: Habit[], days: Tracke
     streak += 1;
   }
 
-  const bestDay = days.reduce<TrackerDay | null>((current, day) => {
-    const currentScore = current
-      ? current.todoCreated + current.todoCompleted + current.habitCheckIns
-      : -1;
+  const busiestDay = days.reduce<TrackerDay | null>((current, day) => {
+    const currentScore = current ? current.todoCreated + current.todoCompleted + current.habitCheckIns : -1;
     const dayScore = day.todoCreated + day.todoCompleted + day.habitCheckIns;
-
-    if (!current || dayScore > currentScore) {
-      return day;
-    }
-
-    return current;
+    return !current || dayScore > currentScore ? day : current;
   }, null);
 
   return {
@@ -105,9 +118,11 @@ export const buildTrackerSummary = (todos: Todo[], habits: Habit[], days: Tracke
     totalCheckIns,
     totalCompletions,
     streak,
-    bestDay: bestDay?.date ?? null,
-    bestDayCount:
-      bestDay ? bestDay.todoCreated + bestDay.todoCompleted + bestDay.habitCheckIns : 0,
+    bestDay: busiestDay?.date ?? null,
+    bestDayCount: busiestDay ? busiestDay.todoCreated + busiestDay.todoCompleted + busiestDay.habitCheckIns : 0,
+    bestStreak: findBestStreak(days),
+    busiestDay: busiestDay?.date ?? null,
+    busiestDayCount: busiestDay ? busiestDay.todoCreated + busiestDay.todoCompleted + busiestDay.habitCheckIns : 0,
   };
 };
 
@@ -115,15 +130,17 @@ export const buildTrackerLog = (todos: Todo[], habits: Habit[]): TrackerLogItem[
   const items: TrackerLogItem[] = [];
 
   for (const todo of todos) {
-    items.push({
-      id: `${todo.id}-created`,
-      title: todo.title,
-      subtitle: "Created todo",
-      time: todo.createdAt,
-      kind: "todo-created",
-    });
+    if (!todo.archived) {
+      items.push({
+        id: `${todo.id}-created`,
+        title: todo.title,
+        subtitle: "Created todo",
+        time: todo.createdAt,
+        kind: "todo-created",
+      });
+    }
 
-    if (todo.completedAt) {
+    if (todo.completedAt && !todo.archived) {
       items.push({
         id: `${todo.id}-completed`,
         title: todo.title,
@@ -135,13 +152,15 @@ export const buildTrackerLog = (todos: Todo[], habits: Habit[]): TrackerLogItem[
   }
 
   for (const habit of habits) {
-    items.push({
-      id: `${habit.id}-created`,
-      title: habit.title,
-      subtitle: "Created habit",
-      time: habit.createdAt,
-      kind: "habit-created",
-    });
+    if (!habit.archived) {
+      items.push({
+        id: `${habit.id}-created`,
+        title: habit.title,
+        subtitle: "Created habit",
+        time: habit.createdAt,
+        kind: "habit-created",
+      });
+    }
 
     for (const checkIn of habit.checkIns) {
       items.push({
@@ -156,7 +175,7 @@ export const buildTrackerLog = (todos: Todo[], habits: Habit[]): TrackerLogItem[
 
   return items
     .sort((a, b) => b.time.localeCompare(a.time))
-    .slice(0, 10)
+    .slice(0, 12)
     .map((item) => ({
       ...item,
       time: new Date(item.time).toLocaleString(undefined, {
@@ -166,6 +185,18 @@ export const buildTrackerLog = (todos: Todo[], habits: Habit[]): TrackerLogItem[
         minute: "2-digit",
       }),
     }));
+};
+
+export const buildMonthlySeries = (days: TrackerDay[]) => {
+  const recent = days.slice(-28);
+  return recent.reduce(
+    (series, day, index) => {
+      const week = Math.floor(index / 7);
+      series[week] += day.todoCompleted + day.habitCheckIns;
+      return series;
+    },
+    [0, 0, 0, 0],
+  );
 };
 
 export const getIntensity = (value: number) => {
@@ -181,13 +212,12 @@ export const getPercent = (part: number, total: number) => (total === 0 ? 0 : Ma
 export const getDayLabel = (date: string) =>
   new Date(`${date}T00:00:00`).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 
+export const getDayActivity = (day: TrackerDay) => day.todoCreated + day.todoCompleted + day.habitCheckIns;
+
 export const getWeekLabels = (days: TrackerDay[]) => {
   const recent = days.slice(-7);
   return recent.map((day) => new Date(`${day.date}T00:00:00`).toLocaleDateString(undefined, { weekday: "short" }));
 };
-
-export const getDayActivity = (day: TrackerDay) =>
-  day.todoCreated + day.todoCompleted + day.habitCheckIns;
 
 export const isWithinSevenDays = (date: string) => {
   const today = new Date();

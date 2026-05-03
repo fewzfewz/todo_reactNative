@@ -19,7 +19,7 @@ const dayLabels = ["S", "M", "T", "W", "T", "F", "S"];
 
 export default function TrackerScreen() {
   const { colors } = useTheme();
-  const { days, summary, log, week, completionRate, todoStats, habitStats } = useTracker();
+  const { days, summary, log, week, monthly, completionRate, todoStats, habitStats } = useTracker();
   const motion = useSharedValue(0);
 
   useEffect(() => {
@@ -98,6 +98,24 @@ export default function TrackerScreen() {
           <MiniMetric label="Todo done" value={todoStats.completed} color={colors.primary} />
           <MiniMetric label="Habit done" value={habitStats.completedToday} color={colors.success} />
           <MiniMetric label="Check-ins" value={habitStats.totalCheckIns} color={colors.warning} />
+          <MiniMetric label="Archived" value={todoStats.archived + habitStats.archived} color={colors.textMuted} />
+        </View>
+
+        <View style={[styles.panel, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <View style={styles.sectionHeader}>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>Tracker summary</Text>
+            <Text style={[styles.sectionMeta, { color: colors.textMuted }]}>Momentum details</Text>
+          </View>
+          <View style={styles.summaryGrid}>
+            <SummaryChip label="Best streak" value={`${summary.bestStreak} days`} color={colors.primary} />
+            <SummaryChip
+              label="Busiest day"
+              value={summary.busiestDay ? getDayLabel(summary.busiestDay) : "None"}
+              color={colors.success}
+            />
+            <SummaryChip label="Busiest count" value={summary.busiestDayCount} color={colors.warning} />
+            <SummaryChip label="Completions" value={summary.totalCompletions} color={colors.danger} />
+          </View>
         </View>
 
         <View style={[styles.panel, { backgroundColor: colors.surface, borderColor: colors.border }]}>
@@ -203,6 +221,29 @@ export default function TrackerScreen() {
 
         <View style={[styles.panel, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <View style={styles.sectionHeader}>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>Monthly pulse</Text>
+            <Text style={[styles.sectionMeta, { color: colors.textMuted }]}>Last 4 weeks</Text>
+          </View>
+          <View style={styles.monthlyChart}>
+            {monthly.map((value, index) => (
+              <View key={index} style={styles.monthlyColumn}>
+                <View
+                  style={[
+                    styles.monthlyBar,
+                    {
+                      height: Math.max(10, value * 12),
+                      backgroundColor: index % 2 === 0 ? colors.primary : colors.success,
+                    },
+                  ]}
+                />
+                <Text style={[styles.monthlyLabel, { color: colors.textMuted }]}>W{index + 1}</Text>
+              </View>
+            ))}
+          </View>
+        </View>
+
+        <View style={[styles.panel, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <View style={styles.sectionHeader}>
             <Text style={[styles.sectionTitle, { color: colors.text }]}>Recent log</Text>
             <Text style={[styles.sectionMeta, { color: colors.textMuted }]}>Top activity</Text>
           </View>
@@ -281,6 +322,25 @@ function MiniMetric({
   );
 }
 
+function SummaryChip({
+  label,
+  value,
+  color,
+}: {
+  label: string;
+  value: number | string;
+  color: string;
+}) {
+  const { colors } = useTheme();
+
+  return (
+    <View style={[styles.summaryChip, { borderColor: colors.border, backgroundColor: colors.bg }]}>
+      <Text style={[styles.summaryChipLabel, { color }]}>{label}</Text>
+      <Text style={[styles.summaryChipValue, { color: colors.text }]}>{value}</Text>
+    </View>
+  );
+}
+
 function LegendDot({ color, label }: { color: string; label: string }) {
   const { colors } = useTheme();
 
@@ -316,6 +376,27 @@ const styles = StyleSheet.create({
   miniMetric: { borderRadius: 8, borderWidth: 1, flex: 1, padding: 12 },
   miniValue: { fontSize: 24, fontWeight: "800" },
   miniLabel: { fontSize: 12, fontWeight: "800", marginTop: 2, textTransform: "uppercase" },
+  summaryGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+  },
+  summaryChip: {
+    borderRadius: 8,
+    borderWidth: 1,
+    flexBasis: "48%",
+    padding: 12,
+  },
+  summaryChipLabel: {
+    fontSize: 11,
+    fontWeight: "800",
+    textTransform: "uppercase",
+  },
+  summaryChipValue: {
+    fontSize: 16,
+    fontWeight: "800",
+    marginTop: 6,
+  },
   panel: { borderRadius: 8, borderWidth: 1, marginTop: 16, padding: 16 },
   sectionHeader: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", marginBottom: 12 },
   sectionTitle: { fontSize: 18, fontWeight: "800" },
@@ -335,6 +416,25 @@ const styles = StyleSheet.create({
   legendItem: { alignItems: "center", flexDirection: "row", gap: 6 },
   legendDot: { borderRadius: 999, height: 8, width: 8 },
   legendLabel: { fontSize: 12, fontWeight: "700" },
+  monthlyChart: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 8,
+  },
+  monthlyColumn: {
+    alignItems: "center",
+    flex: 1,
+    justifyContent: "flex-end",
+  },
+  monthlyBar: {
+    borderRadius: 999,
+    width: "72%",
+  },
+  monthlyLabel: {
+    fontSize: 11,
+    fontWeight: "700",
+    marginTop: 8,
+  },
   logList: { gap: 12 },
   logRow: { flexDirection: "row", gap: 10 },
   logBadge: { alignSelf: "flex-start", borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6 },
