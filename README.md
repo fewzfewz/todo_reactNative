@@ -7,6 +7,8 @@ A polished Expo Router task app for iOS, Android, and web. Focus List is offline
 - Create, edit, complete, and delete tasks
 - Add notes, due dates, and low/medium/high priorities
 - Search tasks and filter by all, active, or completed
+- Animated focus board on the home screen
+- Activity tracker with a GitHub-style contribution table and weekly graph
 - Persistent dark mode setting
 - Local task stats, completion rate, overdue count, and list management actions
 - Works in Expo Go with no backend required

@@ -12,6 +12,7 @@ const starterTodos: Todo[] = [
     notes: "Pick the three tasks that would make today feel successful.",
     priority: "high",
     completed: false,
+    completedAt: null,
     dueDate: null,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
@@ -22,6 +23,7 @@ const starterTodos: Todo[] = [
     notes: "Open Settings and switch the theme.",
     priority: "medium",
     completed: false,
+    completedAt: null,
     dueDate: null,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
@@ -55,6 +57,11 @@ const sortTodos = (todos: Todo[]) => {
   });
 };
 
+const normalizeTodo = (todo: Partial<Todo> & Pick<Todo, "id" | "title" | "notes" | "priority" | "completed" | "dueDate" | "createdAt" | "updatedAt">): Todo => ({
+  ...todo,
+  completedAt: todo.completedAt ?? null,
+});
+
 type TodoContextType = ReturnType<typeof useTodosState>;
 
 const TodoContext = createContext<TodoContextType | undefined>(undefined);
@@ -72,7 +79,7 @@ function useTodosState() {
           return;
         }
 
-        setTodos(stored ? JSON.parse(stored) : starterTodos);
+        setTodos(stored ? JSON.parse(stored).map(normalizeTodo) : starterTodos);
       })
       .catch(() => {
         if (mounted) {
@@ -105,6 +112,7 @@ function useTodosState() {
       priority: draft.priority,
       dueDate: draft.dueDate,
       completed: false,
+      completedAt: null,
       createdAt: now,
       updatedAt: now,
     };
@@ -136,7 +144,12 @@ function useTodosState() {
       sortTodos(
         current.map((todo) =>
           todo.id === id
-            ? { ...todo, completed: !todo.completed, updatedAt: new Date().toISOString() }
+            ? {
+                ...todo,
+                completed: !todo.completed,
+                completedAt: !todo.completed ? new Date().toISOString() : null,
+                updatedAt: new Date().toISOString(),
+              }
             : todo,
         ),
       ),
@@ -152,7 +165,7 @@ function useTodosState() {
   }, []);
 
   const resetTodos = useCallback(() => {
-    setTodos(starterTodos);
+    setTodos(starterTodos.map(normalizeTodo));
   }, []);
 
   const stats = useMemo(() => {

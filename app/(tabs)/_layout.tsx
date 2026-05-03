@@ -9,21 +9,21 @@ const TabsLayout = () => {
   return (
     <Tabs
       screenOptions={{
-          tabBarActiveTintColor: colors.primary,
-          tabBarInactiveTintColor: colors.textMuted,
-          tabBarStyle: {
-              backgroundColor: colors.surface,
-              borderTopWidth: 1,
-              borderTopColor: colors.border,
-              height: 90,
-              paddingBottom: 20,
-              paddingTop: 5,
-          },
-          tabBarLabelStyle: {
-              fontSize: 12,
-              fontWeight: "600",
-          },
-          headerShown: false,
+        tabBarActiveTintColor: colors.primary,
+        tabBarInactiveTintColor: colors.textMuted,
+        tabBarStyle: {
+          backgroundColor: colors.surface,
+          borderTopColor: colors.border,
+          borderTopWidth: 1,
+          height: 88,
+          paddingBottom: 18,
+          paddingTop: 7,
+        },
+        tabBarLabelStyle: {
+          fontSize: 12,
+          fontWeight: "700",
+        },
+        headerShown: false,
       }}
     >
       <Tabs.Screen
@@ -32,6 +32,15 @@ const TabsLayout = () => {
           title: "Todos",
           tabBarIcon: ({ color, size }) => (
             <Ionicons color={color} name="checkbox-outline" size={size} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="tracker"
+        options={{
+          title: "Tracker",
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons color={color} name="grid-outline" size={size} />
           ),
         }}
       />

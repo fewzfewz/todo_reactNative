@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Alert,
   FlatList,
@@ -20,6 +20,14 @@ import useTheme from "@/hooks/useTheme";
 import { useTodos } from "@/hooks/useTodos";
 import { Todo, TodoDraft, TodoFilter, TodoPriority } from "@/types/todo";
 import { addDays, getDueStatus, isValidDateInput } from "@/utils/date";
+import Animated, {
+  FadeInDown,
+  interpolate,
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withTiming,
+} from "react-native-reanimated";
 
 const priorities: TodoPriority[] = ["low", "medium", "high"];
 const filters: TodoFilter[] = ["all", "active", "completed"];
@@ -119,7 +127,7 @@ export default function Index() {
     ]);
   };
 
-  const renderTodo = ({ item }: { item: Todo }) => {
+  const renderTodo = ({ item, index }: { item: Todo; index: number }) => {
     const due = getDueStatus(item.dueDate, item.completed);
     const priorityTone = {
       low: colors.success,
@@ -128,17 +136,18 @@ export default function Index() {
     }[item.priority];
 
     return (
-      <Pressable
-        onPress={() => openEditModal(item)}
-        style={({ pressed }) => [
-          styles.todoCard,
-          {
-            backgroundColor: colors.surface,
-            borderColor: item.completed ? colors.border : priorityTone,
-            opacity: pressed ? 0.9 : 1,
-          },
-        ]}
-      >
+      <Animated.View entering={FadeInDown.delay(index * 40).duration(320)}>
+        <Pressable
+          onPress={() => openEditModal(item)}
+          style={({ pressed }) => [
+            styles.todoCard,
+            {
+              backgroundColor: colors.surface,
+              borderColor: item.completed ? colors.border : priorityTone,
+              opacity: pressed ? 0.9 : 1,
+            },
+          ]}
+        >
         <Pressable
           accessibilityRole="checkbox"
           accessibilityState={{ checked: item.completed }}
@@ -207,7 +216,8 @@ export default function Index() {
             </View>
           </View>
         </View>
-      </Pressable>
+        </Pressable>
+      </Animated.View>
     );
   };
 
@@ -229,6 +239,8 @@ export default function Index() {
           <Ionicons color="#ffffff" name="add" size={28} />
         </Pressable>
       </View>
+
+      <FocusDeck colors={colors} stats={stats} />
 
       <View style={styles.statsRow}>
         <Stat label="Active" value={stats.active} color={colors.primary} />
@@ -396,10 +408,12 @@ export default function Index() {
 }
 
 function Stat({ label, value, color }: { label: string; value: number; color: string }) {
+  const { colors } = useTheme();
+
   return (
-    <View style={styles.stat}>
+    <View style={[styles.stat, { backgroundColor: colors.surface, borderColor: colors.border }]}>
       <Text style={[styles.statValue, { color }]}>{value}</Text>
-      <Text style={styles.statLabel}>{label}</Text>
+      <Text style={[styles.statLabel, { color: colors.textMuted }]}>{label}</Text>
     </View>
   );
 }
@@ -414,6 +428,110 @@ function DateChip({ label, onPress }: { label: string; onPress: () => void }) {
     >
       <Text style={[styles.dateChipText, { color: colors.text }]}>{label}</Text>
     </Pressable>
+  );
+}
+
+function FocusDeck({
+  colors,
+  stats,
+}: {
+  colors: ReturnType<typeof useTheme>["colors"];
+  stats: { active: number; completed: number; highPriority: number };
+}) {
+  const spin = useSharedValue(0);
+
+  useEffect(() => {
+    spin.value = withRepeat(withTiming(1, { duration: 6000 }), -1, true);
+  }, [spin]);
+
+  const deckStyle = useAnimatedStyle(() => {
+    const tiltX = interpolate(spin.value, [0, 1], [10, -10]);
+    const tiltY = interpolate(spin.value, [0, 1], [-14, 14]);
+    const lift = interpolate(spin.value, [0, 1], [0, -5]);
+
+    return {
+      transform: [
+        { perspective: 900 },
+        { rotateX: `${tiltX}deg` },
+        { rotateY: `${tiltY}deg` },
+        { translateY: lift },
+      ],
+    };
+  });
+
+  return (
+    <Animated.View
+      style={[styles.focusDeck, { backgroundColor: colors.surface, borderColor: colors.border }, deckStyle]}
+    >
+      <View style={styles.focusDeckTop}>
+        <View>
+          <Text style={[styles.focusDeckLabel, { color: colors.textMuted }]}>3D focus board</Text>
+          <Text style={[styles.focusDeckTitle, { color: colors.text }]}>Daily momentum</Text>
+        </View>
+        <View style={[styles.focusDeckBadge, { backgroundColor: colors.primary }]} />
+      </View>
+
+      <View style={styles.focusDeckStats}>
+        <DeckMetric
+          label="Active"
+          value={stats.active}
+          color={colors.primary}
+          textColor={colors.text}
+          mutedColor={colors.textMuted}
+        />
+        <DeckMetric
+          label="Done"
+          value={stats.completed}
+          color={colors.success}
+          textColor={colors.text}
+          mutedColor={colors.textMuted}
+        />
+        <DeckMetric
+          label="Urgent"
+          value={stats.highPriority}
+          color={colors.danger}
+          textColor={colors.text}
+          mutedColor={colors.textMuted}
+        />
+      </View>
+
+      <View style={styles.focusDeckRail}>
+        <View
+          style={[
+            styles.focusDeckRailFill,
+            {
+              width: `${Math.max(
+                12,
+                (stats.completed / Math.max(1, stats.active + stats.completed)) * 100,
+              )}%`,
+              backgroundColor: colors.success,
+            },
+          ]}
+        />
+      </View>
+    </Animated.View>
+  );
+}
+
+function DeckMetric({
+  label,
+  value,
+  color,
+  textColor,
+  mutedColor,
+}: {
+  label: string;
+  value: number;
+  color: string;
+  textColor: string;
+  mutedColor: string;
+}) {
+  return (
+    <View style={styles.deckMetric}>
+      <View style={[styles.deckMetricDot, { backgroundColor: color }]} />
+      <Text style={[styles.deckMetricValue, { color: textColor }]}>{value}</Text>
+      <Text style={[styles.deckMetricLabel, { color: mutedColor }]}>{label}</Text>
+    </View>
   );
 }
 
@@ -451,8 +569,8 @@ const styles = StyleSheet.create({
     paddingTop: 18,
   },
   stat: {
-    backgroundColor: "rgba(127,127,127,0.08)",
     borderRadius: 8,
+    borderWidth: 1,
     flex: 1,
     paddingHorizontal: 14,
     paddingVertical: 12,
@@ -462,7 +580,6 @@ const styles = StyleSheet.create({
     fontWeight: "800",
   },
   statLabel: {
-    color: "#7c8798",
     fontSize: 12,
     fontWeight: "700",
     marginTop: 2,
@@ -680,5 +797,70 @@ const styles = StyleSheet.create({
     color: "#ffffff",
     fontSize: 16,
     fontWeight: "800",
+  },
+  focusDeck: {
+    borderRadius: 8,
+    borderWidth: 1,
+    marginHorizontal: 20,
+    marginTop: 18,
+    padding: 16,
+  },
+  focusDeckTop: {
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "space-between",
+  },
+  focusDeckLabel: {
+    fontSize: 12,
+    fontWeight: "800",
+    textTransform: "uppercase",
+  },
+  focusDeckTitle: {
+    fontSize: 20,
+    fontWeight: "800",
+    marginTop: 4,
+  },
+  focusDeckBadge: {
+    borderRadius: 999,
+    height: 14,
+    width: 14,
+  },
+  focusDeckStats: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 16,
+  },
+  deckMetric: {
+    backgroundColor: "rgba(127,127,127,0.08)",
+    borderRadius: 8,
+    flex: 1,
+    padding: 12,
+  },
+  deckMetricDot: {
+    borderRadius: 999,
+    height: 8,
+    width: 8,
+  },
+  deckMetricValue: {
+    fontSize: 22,
+    fontWeight: "800",
+    marginTop: 10,
+  },
+  deckMetricLabel: {
+    fontSize: 12,
+    fontWeight: "800",
+    marginTop: 2,
+    textTransform: "uppercase",
+  },
+  focusDeckRail: {
+    backgroundColor: "rgba(127,127,127,0.12)",
+    borderRadius: 999,
+    height: 8,
+    marginTop: 14,
+    overflow: "hidden",
+  },
+  focusDeckRailFill: {
+    borderRadius: 999,
+    height: "100%",
   },
 });

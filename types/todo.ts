@@ -8,6 +8,7 @@ export type Todo = {
   notes: string;
   priority: TodoPriority;
   completed: boolean;
+  completedAt: string | null;
   dueDate: string | null;
   createdAt: string;
   updatedAt: string;
