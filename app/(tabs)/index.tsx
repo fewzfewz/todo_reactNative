@@ -1,98 +1,684 @@
-import { Image } from 'expo-image';
-import { Platform, StyleSheet } from 'react-native';
+import { Ionicons } from "@expo/vector-icons";
+import * as Haptics from "expo-haptics";
+import { useMemo, useState } from "react";
+import {
+  Alert,
+  FlatList,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
-import { HelloWave } from '@/components/hello-wave';
-import ParallaxScrollView from '@/components/parallax-scroll-view';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { Link } from 'expo-router';
+import useTheme from "@/hooks/useTheme";
+import { useTodos } from "@/hooks/useTodos";
+import { Todo, TodoDraft, TodoFilter, TodoPriority } from "@/types/todo";
+import { addDays, getDueStatus, isValidDateInput } from "@/utils/date";
 
-export default function HomeScreen() {
-  return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={
-        <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
-        />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
-        <HelloWave />
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({
-              ios: 'cmd + d',
-              android: 'cmd + m',
-              web: 'F12',
-            })}
-          </ThemedText>{' '}
-          to open developer tools.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <Link href="/modal">
-          <Link.Trigger>
-            <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-          </Link.Trigger>
-          <Link.Preview />
-          <Link.Menu>
-            <Link.MenuAction title="Action" icon="cube" onPress={() => alert('Action pressed')} />
-            <Link.MenuAction
-              title="Share"
-              icon="square.and.arrow.up"
-              onPress={() => alert('Share pressed')}
-            />
-            <Link.Menu title="More" icon="ellipsis">
-              <Link.MenuAction
-                title="Delete"
-                icon="trash"
-                destructive
-                onPress={() => alert('Delete pressed')}
+const priorities: TodoPriority[] = ["low", "medium", "high"];
+const filters: TodoFilter[] = ["all", "active", "completed"];
+
+const emptyDraft: TodoDraft = {
+  title: "",
+  notes: "",
+  priority: "medium",
+  dueDate: null,
+};
+
+export default function Index() {
+  const { colors } = useTheme();
+  const { todos, stats, isLoading, addTodo, updateTodo, toggleTodo, deleteTodo } = useTodos();
+  const [filter, setFilter] = useState<TodoFilter>("all");
+  const [query, setQuery] = useState("");
+  const [modalVisible, setModalVisible] = useState(false);
+  const [editingTodo, setEditingTodo] = useState<Todo | null>(null);
+  const [draft, setDraft] = useState<TodoDraft>(emptyDraft);
+  const [dateInput, setDateInput] = useState("");
+
+  const filteredTodos = useMemo(() => {
+    const normalizedQuery = query.trim().toLowerCase();
+
+    return todos.filter((todo) => {
+      const matchesFilter =
+        filter === "all" || (filter === "active" ? !todo.completed : todo.completed);
+      const matchesQuery =
+        !normalizedQuery ||
+        todo.title.toLowerCase().includes(normalizedQuery) ||
+        todo.notes.toLowerCase().includes(normalizedQuery);
+
+      return matchesFilter && matchesQuery;
+    });
+  }, [filter, query, todos]);
+
+  const openCreateModal = () => {
+    setEditingTodo(null);
+    setDraft(emptyDraft);
+    setDateInput("");
+    setModalVisible(true);
+  };
+
+  const openEditModal = (todo: Todo) => {
+    setEditingTodo(todo);
+    setDraft({
+      title: todo.title,
+      notes: todo.notes,
+      priority: todo.priority,
+      dueDate: todo.dueDate,
+    });
+    setDateInput(todo.dueDate ?? "");
+    setModalVisible(true);
+  };
+
+  const closeModal = () => {
+    setModalVisible(false);
+    setEditingTodo(null);
+    setDraft(emptyDraft);
+    setDateInput("");
+  };
+
+  const submitDraft = () => {
+    const title = draft.title.trim();
+    const cleanDate = dateInput.trim();
+
+    if (!title) {
+      Alert.alert("Add a title", "A task needs a short title before it can be saved.");
+      return;
+    }
+
+    if (cleanDate && !isValidDateInput(cleanDate)) {
+      Alert.alert("Check the date", "Use the YYYY-MM-DD format, like 2026-05-04.");
+      return;
+    }
+
+    const payload = { ...draft, title, dueDate: cleanDate || null };
+
+    if (editingTodo) {
+      updateTodo(editingTodo.id, payload);
+    } else {
+      addTodo(payload);
+    }
+
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    closeModal();
+  };
+
+  const confirmDelete = (todo: Todo) => {
+    Alert.alert("Delete task?", todo.title, [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Delete",
+        style: "destructive",
+        onPress: () => deleteTodo(todo.id),
+      },
+    ]);
+  };
+
+  const renderTodo = ({ item }: { item: Todo }) => {
+    const due = getDueStatus(item.dueDate, item.completed);
+    const priorityTone = {
+      low: colors.success,
+      medium: colors.warning,
+      high: colors.danger,
+    }[item.priority];
+
+    return (
+      <Pressable
+        onPress={() => openEditModal(item)}
+        style={({ pressed }) => [
+          styles.todoCard,
+          {
+            backgroundColor: colors.surface,
+            borderColor: item.completed ? colors.border : priorityTone,
+            opacity: pressed ? 0.9 : 1,
+          },
+        ]}
+      >
+        <Pressable
+          accessibilityRole="checkbox"
+          accessibilityState={{ checked: item.completed }}
+          onPress={() => {
+            toggleTodo(item.id);
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          }}
+          style={[
+            styles.checkButton,
+            {
+              backgroundColor: item.completed ? colors.success : "transparent",
+              borderColor: item.completed ? colors.success : colors.border,
+            },
+          ]}
+        >
+          {item.completed ? <Ionicons color="#ffffff" name="checkmark" size={18} /> : null}
+        </Pressable>
+
+        <View style={styles.todoContent}>
+          <View style={styles.todoHeader}>
+            <Text
+              numberOfLines={2}
+              style={[
+                styles.todoTitle,
+                { color: colors.text, textDecorationLine: item.completed ? "line-through" : "none" },
+              ]}
+            >
+              {item.title}
+            </Text>
+            <Pressable
+              accessibilityLabel={`Delete ${item.title}`}
+              hitSlop={10}
+              onPress={() => confirmDelete(item)}
+              style={styles.iconButton}
+            >
+              <Ionicons color={colors.textMuted} name="trash-outline" size={20} />
+            </Pressable>
+          </View>
+
+          {item.notes ? (
+            <Text numberOfLines={2} style={[styles.todoNotes, { color: colors.textMuted }]}>
+              {item.notes}
+            </Text>
+          ) : null}
+
+          <View style={styles.metaRow}>
+            <View style={[styles.pill, { backgroundColor: `${priorityTone}22` }]}>
+              <View style={[styles.priorityDot, { backgroundColor: priorityTone }]} />
+              <Text style={[styles.pillText, { color: priorityTone }]}>{item.priority}</Text>
+            </View>
+            <View style={[styles.pill, { backgroundColor: colors.bg }]}>
+              <Ionicons
+                color={
+                  due.tone === "danger"
+                    ? colors.danger
+                    : due.tone === "warning"
+                      ? colors.warning
+                      : due.tone === "success"
+                        ? colors.success
+                        : colors.textMuted
+                }
+                name="calendar-outline"
+                size={14}
               />
-            </Link.Menu>
-          </Link.Menu>
-        </Link>
+              <Text style={[styles.pillText, { color: colors.textMuted }]}>{due.label}</Text>
+            </View>
+          </View>
+        </View>
+      </Pressable>
+    );
+  };
 
-        <ThemedText>
-          {`Tap the Explore tab to learn more about what's included in this starter app.`}
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          {`When you're ready, run `}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
-      </ThemedView>
-    </ParallaxScrollView>
+  return (
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.bg }]}>
+      <View style={styles.header}>
+        <View>
+          <Text style={[styles.eyebrow, { color: colors.textMuted }]}>Today</Text>
+          <Text style={[styles.title, { color: colors.text }]}>Focus List</Text>
+        </View>
+        <Pressable
+          accessibilityLabel="Add task"
+          onPress={openCreateModal}
+          style={({ pressed }) => [
+            styles.addButton,
+            { backgroundColor: colors.primary, opacity: pressed ? 0.85 : 1 },
+          ]}
+        >
+          <Ionicons color="#ffffff" name="add" size={28} />
+        </Pressable>
+      </View>
+
+      <View style={styles.statsRow}>
+        <Stat label="Active" value={stats.active} color={colors.primary} />
+        <Stat label="Done" value={stats.completed} color={colors.success} />
+        <Stat label="Urgent" value={stats.highPriority} color={colors.danger} />
+      </View>
+
+      <View style={[styles.searchBox, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <Ionicons color={colors.textMuted} name="search" size={18} />
+        <TextInput
+          placeholder="Search tasks"
+          placeholderTextColor={colors.textMuted}
+          value={query}
+          onChangeText={setQuery}
+          style={[styles.searchInput, { color: colors.text }]}
+        />
+        {query ? (
+          <Pressable accessibilityLabel="Clear search" onPress={() => setQuery("")}>
+            <Ionicons color={colors.textMuted} name="close-circle" size={18} />
+          </Pressable>
+        ) : null}
+      </View>
+
+      <View style={[styles.segmented, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        {filters.map((item) => (
+          <Pressable
+            key={item}
+            onPress={() => setFilter(item)}
+            style={[
+              styles.segment,
+              { backgroundColor: filter === item ? colors.primary : "transparent" },
+            ]}
+          >
+            <Text
+              style={[
+                styles.segmentText,
+                { color: filter === item ? "#ffffff" : colors.textMuted },
+              ]}
+            >
+              {item}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
+
+      <FlatList
+        data={filteredTodos}
+        keyExtractor={(item) => item.id}
+        renderItem={renderTodo}
+        contentContainerStyle={styles.listContent}
+        showsVerticalScrollIndicator={false}
+        ListEmptyComponent={
+          <View style={[styles.emptyState, { borderColor: colors.border }]}>
+            <Ionicons color={colors.textMuted} name="sparkles-outline" size={30} />
+            <Text style={[styles.emptyTitle, { color: colors.text }]}>
+              {isLoading ? "Loading tasks" : "Nothing here yet"}
+            </Text>
+            <Text style={[styles.emptyText, { color: colors.textMuted }]}>
+              Add a task or adjust your filters to bring your list back into view.
+            </Text>
+          </View>
+        }
+      />
+
+      <Modal animationType="slide" transparent visible={modalVisible} onRequestClose={closeModal}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          style={styles.modalOverlay}
+        >
+          <Pressable style={styles.modalBackdrop} onPress={closeModal} />
+          <View style={[styles.modalCard, { backgroundColor: colors.surface }]}>
+            <View style={styles.modalHeader}>
+              <Text style={[styles.modalTitle, { color: colors.text }]}>
+                {editingTodo ? "Edit task" : "New task"}
+              </Text>
+              <Pressable accessibilityLabel="Close modal" onPress={closeModal} style={styles.iconButton}>
+                <Ionicons color={colors.textMuted} name="close" size={24} />
+              </Pressable>
+            </View>
+
+            <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+              <TextInput
+                autoFocus
+                placeholder="Task title"
+                placeholderTextColor={colors.textMuted}
+                value={draft.title}
+                onChangeText={(title) => setDraft((current) => ({ ...current, title }))}
+                style={[
+                  styles.input,
+                  { backgroundColor: colors.backgrounds.input, borderColor: colors.border, color: colors.text },
+                ]}
+              />
+              <TextInput
+                multiline
+                placeholder="Notes"
+                placeholderTextColor={colors.textMuted}
+                value={draft.notes}
+                onChangeText={(notes) => setDraft((current) => ({ ...current, notes }))}
+                style={[
+                  styles.input,
+                  styles.notesInput,
+                  { backgroundColor: colors.backgrounds.input, borderColor: colors.border, color: colors.text },
+                ]}
+              />
+
+              <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>Priority</Text>
+              <View style={styles.choiceRow}>
+                {priorities.map((priority) => (
+                  <Pressable
+                    key={priority}
+                    onPress={() => setDraft((current) => ({ ...current, priority }))}
+                    style={[
+                      styles.choice,
+                      {
+                        backgroundColor: draft.priority === priority ? colors.primary : colors.bg,
+                        borderColor: colors.border,
+                      },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.choiceText,
+                        { color: draft.priority === priority ? "#ffffff" : colors.text },
+                      ]}
+                    >
+                      {priority}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+
+              <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>Due date</Text>
+              <TextInput
+                placeholder="YYYY-MM-DD"
+                placeholderTextColor={colors.textMuted}
+                value={dateInput}
+                onChangeText={setDateInput}
+                style={[
+                  styles.input,
+                  { backgroundColor: colors.backgrounds.input, borderColor: colors.border, color: colors.text },
+                ]}
+              />
+              <View style={styles.choiceRow}>
+                <DateChip label="Today" onPress={() => setDateInput(addDays(0))} />
+                <DateChip label="Tomorrow" onPress={() => setDateInput(addDays(1))} />
+                <DateChip label="No date" onPress={() => setDateInput("")} />
+              </View>
+
+              <Pressable
+                onPress={submitDraft}
+                style={({ pressed }) => [
+                  styles.saveButton,
+                  { backgroundColor: colors.primary, opacity: pressed ? 0.86 : 1 },
+                ]}
+              >
+                <Ionicons color="#ffffff" name="save-outline" size={20} />
+                <Text style={styles.saveButtonText}>{editingTodo ? "Save changes" : "Create task"}</Text>
+              </Pressable>
+            </ScrollView>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+    </SafeAreaView>
+  );
+}
+
+function Stat({ label, value, color }: { label: string; value: number; color: string }) {
+  return (
+    <View style={styles.stat}>
+      <Text style={[styles.statValue, { color }]}>{value}</Text>
+      <Text style={styles.statLabel}>{label}</Text>
+    </View>
+  );
+}
+
+function DateChip({ label, onPress }: { label: string; onPress: () => void }) {
+  const { colors } = useTheme();
+
+  return (
+    <Pressable
+      onPress={onPress}
+      style={[styles.dateChip, { backgroundColor: colors.bg, borderColor: colors.border }]}
+    >
+      <Text style={[styles.dateChipText, { color: colors.text }]}>{label}</Text>
+    </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  titleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
+  safeArea: {
+    flex: 1,
   },
-  stepContainer: {
+  header: {
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingHorizontal: 20,
+    paddingTop: 10,
+  },
+  eyebrow: {
+    fontSize: 13,
+    fontWeight: "700",
+    textTransform: "uppercase",
+  },
+  title: {
+    fontSize: 34,
+    fontWeight: "800",
+  },
+  addButton: {
+    alignItems: "center",
+    borderRadius: 18,
+    height: 54,
+    justifyContent: "center",
+    width: 54,
+  },
+  statsRow: {
+    flexDirection: "row",
+    gap: 10,
+    paddingHorizontal: 20,
+    paddingTop: 18,
+  },
+  stat: {
+    backgroundColor: "rgba(127,127,127,0.08)",
+    borderRadius: 8,
+    flex: 1,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  statValue: {
+    fontSize: 24,
+    fontWeight: "800",
+  },
+  statLabel: {
+    color: "#7c8798",
+    fontSize: 12,
+    fontWeight: "700",
+    marginTop: 2,
+    textTransform: "uppercase",
+  },
+  searchBox: {
+    alignItems: "center",
+    borderRadius: 8,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: 10,
+    marginHorizontal: 20,
+    marginTop: 18,
+    paddingHorizontal: 14,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 16,
+    minHeight: 48,
+  },
+  segmented: {
+    borderRadius: 8,
+    borderWidth: 1,
+    flexDirection: "row",
+    marginHorizontal: 20,
+    marginTop: 12,
+    padding: 4,
+  },
+  segment: {
+    alignItems: "center",
+    borderRadius: 6,
+    flex: 1,
+    paddingVertical: 10,
+  },
+  segmentText: {
+    fontSize: 13,
+    fontWeight: "800",
+    textTransform: "capitalize",
+  },
+  listContent: {
+    gap: 12,
+    padding: 20,
+    paddingBottom: 120,
+  },
+  todoCard: {
+    borderLeftWidth: 4,
+    borderRadius: 8,
+    flexDirection: "row",
+    gap: 12,
+    padding: 14,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.08,
+    shadowRadius: 16,
+    elevation: 2,
+  },
+  checkButton: {
+    alignItems: "center",
+    borderRadius: 14,
+    borderWidth: 2,
+    height: 28,
+    justifyContent: "center",
+    marginTop: 2,
+    width: 28,
+  },
+  todoContent: {
+    flex: 1,
+  },
+  todoHeader: {
+    alignItems: "flex-start",
+    flexDirection: "row",
     gap: 8,
+    justifyContent: "space-between",
+  },
+  todoTitle: {
+    flex: 1,
+    fontSize: 17,
+    fontWeight: "800",
+  },
+  iconButton: {
+    alignItems: "center",
+    height: 34,
+    justifyContent: "center",
+    width: 34,
+  },
+  todoNotes: {
+    fontSize: 14,
+    lineHeight: 20,
+    marginTop: 5,
+  },
+  metaRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginTop: 12,
+  },
+  pill: {
+    alignItems: "center",
+    borderRadius: 999,
+    flexDirection: "row",
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  priorityDot: {
+    borderRadius: 4,
+    height: 8,
+    width: 8,
+  },
+  pillText: {
+    fontSize: 12,
+    fontWeight: "800",
+    textTransform: "capitalize",
+  },
+  emptyState: {
+    alignItems: "center",
+    borderRadius: 8,
+    borderStyle: "dashed",
+    borderWidth: 1,
+    marginTop: 24,
+    padding: 28,
+  },
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: "800",
+    marginTop: 12,
+  },
+  emptyText: {
+    fontSize: 14,
+    lineHeight: 20,
+    marginTop: 6,
+    textAlign: "center",
+  },
+  modalOverlay: {
+    flex: 1,
+    justifyContent: "flex-end",
+  },
+  modalBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0,0,0,0.45)",
+  },
+  modalCard: {
+    borderTopLeftRadius: 22,
+    borderTopRightRadius: 22,
+    maxHeight: "88%",
+    padding: 20,
+  },
+  modalHeader: {
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 12,
+  },
+  modalTitle: {
+    fontSize: 24,
+    fontWeight: "800",
+  },
+  input: {
+    borderRadius: 8,
+    borderWidth: 1,
+    fontSize: 16,
+    marginBottom: 12,
+    minHeight: 50,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  notesInput: {
+    minHeight: 96,
+    textAlignVertical: "top",
+  },
+  fieldLabel: {
+    fontSize: 12,
+    fontWeight: "800",
     marginBottom: 8,
+    marginTop: 4,
+    textTransform: "uppercase",
   },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
+  choiceRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginBottom: 14,
+  },
+  choice: {
+    borderRadius: 8,
+    borderWidth: 1,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+  choiceText: {
+    fontSize: 14,
+    fontWeight: "800",
+    textTransform: "capitalize",
+  },
+  dateChip: {
+    borderRadius: 999,
+    borderWidth: 1,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+  },
+  dateChipText: {
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  saveButton: {
+    alignItems: "center",
+    borderRadius: 8,
+    flexDirection: "row",
+    gap: 8,
+    justifyContent: "center",
+    marginTop: 4,
+    paddingVertical: 15,
+  },
+  saveButtonText: {
+    color: "#ffffff",
+    fontSize: 16,
+    fontWeight: "800",
   },
 });
