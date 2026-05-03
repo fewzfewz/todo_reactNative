@@ -4,6 +4,7 @@ import { Alert, Pressable, ScrollView, StyleSheet, Switch, Text, View } from "re
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import useTheme from "@/hooks/useTheme";
+import { useHabits } from "@/hooks/useHabits";
 import { useTodos } from "@/hooks/useTodos";
 
 const appVersion = "1.0.0";
@@ -11,6 +12,7 @@ const appVersion = "1.0.0";
 export default function SettingsScreen() {
   const { colors, isDarkMode, toggleDarkMode } = useTheme();
   const { stats, clearCompleted, resetTodos } = useTodos();
+  const { stats: habitStats, resetHabits } = useHabits();
   const completionRate = stats.total ? Math.round((stats.completed / stats.total) * 100) : 0;
 
   const confirmClearCompleted = () => {
@@ -77,8 +79,8 @@ export default function SettingsScreen() {
         <View style={styles.statsGrid}>
           <Metric label="Completion" value={`${completionRate}%`} icon="analytics-outline" color={colors.primary} />
           <Metric label="All tasks" value={stats.total} icon="albums-outline" color={colors.warning} />
-          <Metric label="Active" value={stats.active} icon="radio-button-on-outline" color={colors.danger} />
-          <Metric label="Overdue" value={stats.overdue} icon="alert-circle-outline" color={colors.danger} />
+          <Metric label="Habits" value={habitStats.total} icon="leaf-outline" color={colors.success} />
+          <Metric label="Check-ins" value={habitStats.totalCheckIns} icon="checkmark-done-outline" color={colors.danger} />
         </View>
 
         <View style={[styles.panel, { backgroundColor: colors.surface, borderColor: colors.border }]}>
@@ -96,6 +98,23 @@ export default function SettingsScreen() {
             label="Reset starter list"
             onPress={confirmReset}
             sublabel="Restore the sample tasks for a clean demo."
+          />
+          <View style={[styles.divider, { backgroundColor: colors.border }]} />
+          <ActionRow
+            color={colors.success}
+            icon="leaf-outline"
+            label="Reset habits"
+            onPress={() => {
+              Alert.alert("Reset habit list?", "This restores the starter habits only.", [
+                { text: "Cancel", style: "cancel" },
+                {
+                  text: "Reset",
+                  style: "destructive",
+                  onPress: () => resetHabits(),
+                },
+              ]);
+            }}
+            sublabel="Restore the starter habits only."
           />
         </View>
 

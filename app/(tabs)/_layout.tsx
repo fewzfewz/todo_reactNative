@@ -36,6 +36,15 @@ const TabsLayout = () => {
         }}
       />
       <Tabs.Screen
+        name="habits"
+        options={{
+          title: "Habits",
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons color={color} name="leaf-outline" size={size} />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="tracker"
         options={{
           title: "Tracker",

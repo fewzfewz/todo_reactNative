@@ -1,3 +1,4 @@
+import { Habit } from "@/types/habit";
 import { Todo } from "@/types/todo";
 import { TrackerDay, TrackerLogItem, TrackerSummary } from "@/types/tracker";
 
@@ -20,8 +21,9 @@ const makeDays = (count: number) => {
     date.setDate(date.getDate() - offset);
     days.push({
       date: toDayKey(date),
-      created: 0,
-      completed: 0,
+      todoCreated: 0,
+      todoCompleted: 0,
+      habitCheckIns: 0,
       urgent: 0,
     });
   }
@@ -29,25 +31,38 @@ const makeDays = (count: number) => {
   return days;
 };
 
-export const buildTrackerDays = (todos: Todo[], count = 84) => {
+const dayIndex = (days: TrackerDay[], date: string) => days.findIndex((day) => day.date === date);
+
+export const buildTrackerDays = (todos: Todo[], habits: Habit[], count = 84) => {
   const days = makeDays(count);
-  const index = new Map(days.map((day, position) => [day.date, position]));
 
   for (const todo of todos) {
-    const createdKey = toDayKey(todo.createdAt);
-    const createdIndex = index.get(createdKey);
-    if (createdIndex !== undefined) {
-      days[createdIndex].created += 1;
+    const createdIndex = dayIndex(days, toDayKey(todo.createdAt));
+    if (createdIndex !== -1) {
+      days[createdIndex].todoCreated += 1;
       if (todo.priority === "high") {
         days[createdIndex].urgent += 1;
       }
     }
 
     if (todo.completedAt) {
-      const completedKey = toDayKey(todo.completedAt);
-      const completedIndex = index.get(completedKey);
-      if (completedIndex !== undefined) {
-        days[completedIndex].completed += 1;
+      const completedIndex = dayIndex(days, toDayKey(todo.completedAt));
+      if (completedIndex !== -1) {
+        days[completedIndex].todoCompleted += 1;
+      }
+    }
+  }
+
+  for (const habit of habits) {
+    const createdIndex = dayIndex(days, toDayKey(habit.createdAt));
+    if (createdIndex !== -1) {
+      days[createdIndex].todoCreated += 1;
+    }
+
+    for (const checkIn of habit.checkIns) {
+      const checkInIndex = dayIndex(days, toDayKey(checkIn));
+      if (checkInIndex !== -1) {
+        days[checkInIndex].habitCheckIns += 1;
       }
     }
   }
@@ -55,13 +70,16 @@ export const buildTrackerDays = (todos: Todo[], count = 84) => {
   return days;
 };
 
-export const buildTrackerSummary = (todos: Todo[], days: TrackerDay[]): TrackerSummary => {
-  const totalCreated = todos.length;
-  const totalCompleted = todos.filter((todo) => todo.completed).length;
+export const buildTrackerSummary = (todos: Todo[], habits: Habit[], days: TrackerDay[]): TrackerSummary => {
+  const totalTodos = todos.length;
+  const totalHabits = habits.length;
+  const totalCheckIns = habits.reduce((sum, habit) => sum + habit.checkIns.length, 0);
+  const totalCompletions = todos.filter((todo) => todo.completed).length;
 
   let streak = 0;
   for (let index = days.length - 1; index >= 0; index -= 1) {
-    if (days[index].completed === 0) {
+    const activity = days[index].todoCompleted + days[index].habitCheckIns;
+    if (activity === 0) {
       break;
     }
 
@@ -69,7 +87,12 @@ export const buildTrackerSummary = (todos: Todo[], days: TrackerDay[]): TrackerS
   }
 
   const bestDay = days.reduce<TrackerDay | null>((current, day) => {
-    if (!current || day.completed > current.completed) {
+    const currentScore = current
+      ? current.todoCreated + current.todoCompleted + current.habitCheckIns
+      : -1;
+    const dayScore = day.todoCreated + day.todoCompleted + day.habitCheckIns;
+
+    if (!current || dayScore > currentScore) {
       return day;
     }
 
@@ -77,43 +100,65 @@ export const buildTrackerSummary = (todos: Todo[], days: TrackerDay[]): TrackerS
   }, null);
 
   return {
-    totalCreated,
-    totalCompleted,
+    totalTodos,
+    totalHabits,
+    totalCheckIns,
+    totalCompletions,
     streak,
     bestDay: bestDay?.date ?? null,
-    bestDayCount: bestDay?.completed ?? 0,
+    bestDayCount:
+      bestDay ? bestDay.todoCreated + bestDay.todoCompleted + bestDay.habitCheckIns : 0,
   };
 };
 
-export const buildTrackerLog = (todos: Todo[]): TrackerLogItem[] => {
+export const buildTrackerLog = (todos: Todo[], habits: Habit[]): TrackerLogItem[] => {
   const items: TrackerLogItem[] = [];
 
   for (const todo of todos) {
     items.push({
       id: `${todo.id}-created`,
       title: todo.title,
-      subtitle: todo.createdAt,
+      subtitle: "Created todo",
       time: todo.createdAt,
-      kind: "created",
+      kind: "todo-created",
     });
 
     if (todo.completedAt) {
       items.push({
         id: `${todo.id}-completed`,
         title: todo.title,
-        subtitle: todo.completedAt,
+        subtitle: "Completed todo",
         time: todo.completedAt,
-        kind: "completed",
+        kind: "todo-completed",
+      });
+    }
+  }
+
+  for (const habit of habits) {
+    items.push({
+      id: `${habit.id}-created`,
+      title: habit.title,
+      subtitle: "Created habit",
+      time: habit.createdAt,
+      kind: "habit-created",
+    });
+
+    for (const checkIn of habit.checkIns) {
+      items.push({
+        id: `${habit.id}-${checkIn}`,
+        title: habit.title,
+        subtitle: "Habit checked in",
+        time: `${checkIn}T00:00:00`,
+        kind: "habit-check-in",
       });
     }
   }
 
   return items
     .sort((a, b) => b.time.localeCompare(a.time))
-    .slice(0, 8)
+    .slice(0, 10)
     .map((item) => ({
       ...item,
-      subtitle: item.kind === "created" ? "Created" : "Completed",
       time: new Date(item.time).toLocaleString(undefined, {
         month: "short",
         day: "numeric",
@@ -131,15 +176,18 @@ export const getIntensity = (value: number) => {
   return 4;
 };
 
+export const getPercent = (part: number, total: number) => (total === 0 ? 0 : Math.round((part / total) * 100));
+
+export const getDayLabel = (date: string) =>
+  new Date(`${date}T00:00:00`).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+
 export const getWeekLabels = (days: TrackerDay[]) => {
   const recent = days.slice(-7);
   return recent.map((day) => new Date(`${day.date}T00:00:00`).toLocaleDateString(undefined, { weekday: "short" }));
 };
 
-export const getPercent = (part: number, total: number) => (total === 0 ? 0 : Math.round((part / total) * 100));
-
-export const getDayLabel = (date: string) =>
-  new Date(`${date}T00:00:00`).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+export const getDayActivity = (day: TrackerDay) =>
+  day.todoCreated + day.todoCompleted + day.habitCheckIns;
 
 export const isWithinSevenDays = (date: string) => {
   const today = new Date();

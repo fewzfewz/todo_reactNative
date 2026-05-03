@@ -1,13 +1,16 @@
 export type TrackerDay = {
   date: string;
-  created: number;
-  completed: number;
+  todoCreated: number;
+  todoCompleted: number;
+  habitCheckIns: number;
   urgent: number;
 };
 
 export type TrackerSummary = {
-  totalCreated: number;
-  totalCompleted: number;
+  totalTodos: number;
+  totalHabits: number;
+  totalCheckIns: number;
+  totalCompletions: number;
   streak: number;
   bestDay: string | null;
   bestDayCount: number;
@@ -18,5 +21,5 @@ export type TrackerLogItem = {
   title: string;
   subtitle: string;
   time: string;
-  kind: "created" | "completed" | "urgent";
+  kind: "todo-created" | "todo-completed" | "habit-created" | "habit-check-in";
 };
