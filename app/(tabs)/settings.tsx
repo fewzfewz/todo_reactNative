@@ -1,11 +1,13 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import * as Notifications from "expo-notifications";
+import { router } from "expo-router";
 import { Alert, Pressable, ScrollView, StyleSheet, Switch, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import useTheme from "@/hooks/useTheme";
 import { useHabits } from "@/hooks/useHabits";
+import { useProfile } from "@/hooks/useProfile";
 import { useTodos } from "@/hooks/useTodos";
 
 const appVersion = "1.0.0";
@@ -14,6 +16,7 @@ export default function SettingsScreen() {
   const { colors, isDarkMode, toggleDarkMode } = useTheme();
   const { stats, clearCompleted, resetTodos } = useTodos();
   const { stats: habitStats, resetHabits } = useHabits();
+  const { profile } = useProfile();
   const completionRate = stats.total ? Math.round((stats.completed / stats.total) * 100) : 0;
 
   const requestReminderPermission = async () => {
@@ -70,7 +73,26 @@ export default function SettingsScreen() {
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.header}>
           <Text style={[styles.eyebrow, { color: colors.textMuted }]}>Settings</Text>
-          <Text style={[styles.title, { color: colors.text }]}>Make it yours</Text>
+          <Text style={[styles.title, { color: colors.text }]}>Profile & settings</Text>
+        </View>
+
+        <View style={[styles.profilePanel, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <View style={[styles.avatar, { backgroundColor: profile.avatarColor }]}>
+            <Text style={styles.avatarText}>{profile.name.slice(0, 1).toUpperCase()}</Text>
+          </View>
+          <View style={styles.rowText}>
+            <Text style={[styles.rowTitle, { color: colors.text }]}>{profile.name}</Text>
+            <Text style={[styles.rowSubtitle, { color: colors.textMuted }]}>
+              {profile.role} · {profile.focusArea}
+            </Text>
+            <Text style={[styles.rowSubtitle, { color: colors.textMuted }]}>{profile.bio}</Text>
+          </View>
+          <Pressable
+            onPress={() => router.push("/profile")}
+            style={({ pressed }) => [styles.editButton, { backgroundColor: colors.primary, opacity: pressed ? 0.88 : 1 }]}
+          >
+            <Text style={styles.editButtonText}>Edit</Text>
+          </Pressable>
         </View>
 
         <View style={[styles.panel, { backgroundColor: colors.surface, borderColor: colors.border }]}>
@@ -146,9 +168,9 @@ export default function SettingsScreen() {
         <View style={[styles.aboutPanel, { borderColor: colors.border }]}>
           <Ionicons color={colors.primary} name="checkbox-outline" size={26} />
           <View style={styles.rowText}>
-            <Text style={[styles.rowTitle, { color: colors.text }]}>Focus List</Text>
+            <Text style={[styles.rowTitle, { color: colors.text }]}>Momentum Forge</Text>
             <Text style={[styles.rowSubtitle, { color: colors.textMuted }]}>
-              Offline task planning, saved on this device. Version {appVersion}.
+              Offline task planning, habits, and tracker intelligence. Version {appVersion}.
             </Text>
           </View>
         </View>
@@ -233,6 +255,38 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     marginBottom: 16,
     overflow: "hidden",
+  },
+  profilePanel: {
+    alignItems: "center",
+    borderRadius: 8,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: 12,
+    marginBottom: 16,
+    padding: 16,
+  },
+  avatar: {
+    alignItems: "center",
+    borderRadius: 16,
+    height: 56,
+    justifyContent: "center",
+    width: 56,
+  },
+  avatarText: {
+    color: "#ffffff",
+    fontSize: 24,
+    fontWeight: "800",
+  },
+  editButton: {
+    alignItems: "center",
+    borderRadius: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  editButtonText: {
+    color: "#ffffff",
+    fontSize: 14,
+    fontWeight: "800",
   },
   row: {
     alignItems: "center",

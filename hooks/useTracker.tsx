@@ -12,7 +12,7 @@ import {
 
 export function useTracker() {
   const { todos, stats: todoStats } = useTodos();
-  const { habits, stats: habitStats } = useHabits();
+  const { habits, stats: habitStats, groups } = useHabits();
 
   const days = useMemo(() => buildTrackerDays(todos, habits), [habits, todos]);
   const summary = useMemo(() => buildTrackerSummary(todos, habits, days), [days, habits, todos]);
@@ -30,5 +30,6 @@ export function useTracker() {
     completionRate,
     todoStats,
     habitStats,
+    groups,
   };
 }

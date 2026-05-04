@@ -2,6 +2,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { ReactNode, createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 
 import { Habit, HabitDraft } from "@/types/habit";
+import { buildHabitGroupSummaries, countHabitStreak } from "@/utils/habitTracker";
 import { parseReminderInput } from "@/utils/date";
 import { cancelReminder, scheduleReminder } from "@/utils/reminders";
 
@@ -13,6 +14,7 @@ const starterHabits: Habit[] = [
     title: "Drink water",
     notes: "Mark it off at least once every day.",
     color: "#3b82f6",
+    group: "Health",
     goalPerWeek: 7,
     reminderAt: null,
     notificationId: null,
@@ -27,6 +29,7 @@ const starterHabits: Habit[] = [
     title: "Read for 15 minutes",
     notes: "A small habit that compounds quietly.",
     color: "#10b981",
+    group: "Academics",
     goalPerWeek: 5,
     reminderAt: null,
     notificationId: null,
@@ -45,6 +48,7 @@ const normalizeHabit = (
     Pick<Habit, "id" | "title" | "notes" | "color" | "checkIns" | "createdAt" | "updatedAt">,
 ): Habit => ({
   ...habit,
+  group: habit.group ?? "General",
   goalPerWeek: habit.goalPerWeek ?? 7,
   reminderAt: habit.reminderAt ?? null,
   notificationId: habit.notificationId ?? null,
@@ -133,6 +137,7 @@ function useHabitsState() {
         title: draft.title.trim(),
         notes: draft.notes.trim(),
         color: draft.color,
+        group: draft.group.trim() || "General",
         goalPerWeek: Math.max(1, draft.goalPerWeek || 7),
         reminderAt: parsedReminder ? parsedReminder.toISOString() : null,
         notificationId: null,
@@ -162,6 +167,7 @@ function useHabitsState() {
         title: draft.title.trim(),
         notes: draft.notes.trim(),
         color: draft.color,
+        group: draft.group.trim() || "General",
         goalPerWeek: Math.max(1, draft.goalPerWeek || 7),
         reminderAt: parsedReminder ? parsedReminder.toISOString() : null,
         updatedAt: new Date().toISOString(),
@@ -273,6 +279,7 @@ function useHabitsState() {
     const completedToday = activeHabits.filter((habit) => habit.checkIns.includes(todayKey)).length;
     const totalCheckIns = activeHabits.reduce((sum, habit) => sum + habit.checkIns.length, 0);
     const archived = habits.filter((habit) => habit.archived).length;
+    const activeGroups = new Set(activeHabits.map((habit) => habit.group.trim() || "General")).size;
 
     return {
       total: activeHabits.length,
@@ -280,14 +287,23 @@ function useHabitsState() {
       archived,
       completedToday,
       totalCheckIns,
+      activeGroups,
       streakHabits: activeHabits.filter((habit) => habit.checkIns.length > 0).length,
     };
   }, [habits, todayKey]);
+
+  const groups = useMemo(() => buildHabitGroupSummaries(habits), [habits]);
+  const habitLookup = useMemo(
+    () => new Map(habits.map((habit) => [habit.id, { ...habit, streak: countHabitStreak(habit.checkIns) }])),
+    [habits],
+  );
 
   return {
     habits: sortHabits(habits),
     isLoading,
     stats,
+    groups,
+    habitLookup,
     lastAction,
     addHabit,
     updateHabit,

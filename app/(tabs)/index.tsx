@@ -303,7 +303,7 @@ export default function Index() {
       <View style={styles.header}>
         <View>
           <Text style={[styles.eyebrow, { color: colors.textMuted }]}>Today</Text>
-          <Text style={[styles.title, { color: colors.text }]}>Focus List</Text>
+          <Text style={[styles.title, { color: colors.text }]}>Momentum Forge</Text>
         </View>
         <Pressable
           accessibilityLabel="Add task"
@@ -587,7 +587,7 @@ export default function Index() {
       <Modal animationType="fade" transparent visible={showOnboarding} onRequestClose={() => setShowOnboarding(false)}>
         <View style={styles.onboardingOverlay}>
           <View style={[styles.onboardingCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <Text style={[styles.onboardingTitle, { color: colors.text }]}>Welcome to Focus List</Text>
+            <Text style={[styles.onboardingTitle, { color: colors.text }]}>Welcome to Momentum Forge</Text>
             <Text style={[styles.onboardingBody, { color: colors.textMuted }]}>
               Keep tasks, habits, and your daily tracker in one local-first place.
             </Text>

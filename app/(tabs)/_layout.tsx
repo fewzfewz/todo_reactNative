@@ -56,9 +56,9 @@ const TabsLayout = () => {
       <Tabs.Screen
         name="settings"
         options={{
-          title: "Prefs",
+          title: "Profile",
           tabBarIcon: ({ color, size }) => (
-            <Ionicons color={color} name="settings-outline" size={size} />
+            <Ionicons color={color} name="person-circle-outline" size={size} />
           ),
         }}
       />

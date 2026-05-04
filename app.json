@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "ToDoApp",
-    "slug": "ToDoApp",
+    "name": "Momentum Forge",
+    "slug": "momentum-forge",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",

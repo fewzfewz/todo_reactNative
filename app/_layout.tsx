@@ -1,5 +1,6 @@
 import { ThemeProvider } from "@/hooks/useTheme";
 import { HabitProvider } from "@/hooks/useHabits";
+import { ProfileProvider } from "@/hooks/useProfile";
 import { TodoProvider } from "@/hooks/useTodos";
 import { configureNotifications } from "@/utils/reminders";
 import { Stack } from "expo-router";
@@ -11,9 +12,13 @@ export default function RootLayout() {
     <ThemeProvider>
       <TodoProvider>
         <HabitProvider>
-          <Stack screenOptions={{ headerShown: false }}>
-            <Stack.Screen name="(tabs)" options={{ title: "Home" }} />
-          </Stack>
+          <ProfileProvider>
+            <Stack screenOptions={{ headerShown: false }}>
+              <Stack.Screen name="(tabs)" options={{ title: "Momentum Forge" }} />
+              <Stack.Screen name="profile" options={{ title: "Profile" }} />
+              <Stack.Screen name="habits/[id]" options={{ title: "Habit detail" }} />
+            </Stack>
+          </ProfileProvider>
         </HabitProvider>
       </TodoProvider>
     </ThemeProvider>

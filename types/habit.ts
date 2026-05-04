@@ -3,6 +3,7 @@ export type Habit = {
   title: string;
   notes: string;
   color: string;
+  group: string;
   goalPerWeek: number;
   reminderAt: string | null;
   notificationId: string | null;
@@ -17,6 +18,7 @@ export type HabitDraft = {
   title: string;
   notes: string;
   color: string;
+  group: string;
   goalPerWeek: number;
   reminderAt: string;
 };

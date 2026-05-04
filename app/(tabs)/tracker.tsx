@@ -11,6 +11,7 @@ import Animated, {
 } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import StarMeter from "@/components/StarMeter";
 import useTheme from "@/hooks/useTheme";
 import { useTracker } from "@/hooks/useTracker";
 import { getDayActivity, getDayLabel, getIntensity } from "@/utils/tracker";
@@ -19,7 +20,7 @@ const dayLabels = ["S", "M", "T", "W", "T", "F", "S"];
 
 export default function TrackerScreen() {
   const { colors } = useTheme();
-  const { days, summary, log, week, monthly, completionRate, todoStats, habitStats } = useTracker();
+  const { days, summary, log, week, monthly, completionRate, todoStats, habitStats, groups } = useTracker();
   const motion = useSharedValue(0);
 
   useEffect(() => {
@@ -54,7 +55,7 @@ export default function TrackerScreen() {
         <View style={styles.header}>
           <View>
             <Text style={[styles.eyebrow, { color: colors.textMuted }]}>Activity tracker</Text>
-            <Text style={[styles.title, { color: colors.text }]}>Daily board</Text>
+            <Text style={[styles.title, { color: colors.text }]}>Momentum Forge</Text>
           </View>
           <View style={[styles.badge, { backgroundColor: colors.primary }]}>
             <Text style={styles.badgeText}>{completionRate}%</Text>
@@ -92,6 +93,11 @@ export default function TrackerScreen() {
               ]}
             />
           </View>
+
+          <View style={styles.heroStars}>
+            <Text style={[styles.heroStarsLabel, { color: colors.textMuted }]}>Overall momentum</Text>
+            <StarMeter score={Math.round(completionRate / 20)} label={`${summary.streak} day streak`} />
+          </View>
         </Animated.View>
 
         <View style={styles.statsRow}>
@@ -116,6 +122,41 @@ export default function TrackerScreen() {
             <SummaryChip label="Busiest count" value={summary.busiestDayCount} color={colors.warning} />
             <SummaryChip label="Completions" value={summary.totalCompletions} color={colors.danger} />
           </View>
+        </View>
+
+        <View style={[styles.panel, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <View style={styles.sectionHeader}>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>Habit groups</Text>
+            <Text style={[styles.sectionMeta, { color: colors.textMuted }]}>Stars by group</Text>
+          </View>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.groupRail}>
+            {groups.length ? (
+              groups.map((group) => (
+                <View key={group.group} style={[styles.groupCard, { backgroundColor: colors.bg, borderColor: colors.border }]}>
+                  <View style={styles.groupTop}>
+                    <View style={[styles.groupDot, { backgroundColor: group.color }]} />
+                    <View style={styles.groupText}>
+                      <Text style={[styles.groupTitle, { color: colors.text }]}>{group.group}</Text>
+                      <Text style={[styles.groupMeta, { color: colors.textMuted }]}>
+                        {group.habitCount} habit(s) · {group.weeklyCheckIns} check-ins
+                      </Text>
+                    </View>
+                  </View>
+                  <StarMeter score={group.score} label={`${group.bestStreak} day best`} />
+                  <View style={styles.groupFooter}>
+                    <Text style={[styles.groupFooterText, { color: colors.textMuted }]}>Weekly goal</Text>
+                    <Text style={[styles.groupFooterValue, { color: colors.text }]}>{group.weeklyGoal}</Text>
+                  </View>
+                </View>
+              ))
+            ) : (
+              <View style={[styles.groupEmpty, { backgroundColor: colors.bg, borderColor: colors.border }]}>
+                <Text style={[styles.groupEmptyText, { color: colors.textMuted }]}>
+                  Create a habit group to see its star score here.
+                </Text>
+              </View>
+            )}
+          </ScrollView>
         </View>
 
         <View style={[styles.panel, { backgroundColor: colors.surface, borderColor: colors.border }]}>
@@ -372,6 +413,8 @@ const styles = StyleSheet.create({
   heroStatLabel: { fontSize: 12, fontWeight: "800", marginTop: 2, textTransform: "uppercase" },
   heroRail: { backgroundColor: "rgba(127,127,127,0.12)", borderRadius: 999, height: 8, marginTop: 14, overflow: "hidden" },
   heroRailFill: { borderRadius: 999, height: "100%" },
+  heroStars: { marginTop: 14 },
+  heroStarsLabel: { fontSize: 12, fontWeight: "800", marginBottom: 8, textTransform: "uppercase" },
   statsRow: { flexDirection: "row", gap: 10, marginTop: 14 },
   miniMetric: { borderRadius: 8, borderWidth: 1, flex: 1, padding: 12 },
   miniValue: { fontSize: 24, fontWeight: "800" },
@@ -416,6 +459,18 @@ const styles = StyleSheet.create({
   legendItem: { alignItems: "center", flexDirection: "row", gap: 6 },
   legendDot: { borderRadius: 999, height: 8, width: 8 },
   legendLabel: { fontSize: 12, fontWeight: "700" },
+  groupRail: { gap: 12, paddingBottom: 4 },
+  groupCard: { borderRadius: 8, borderWidth: 1, padding: 14, width: 220 },
+  groupTop: { alignItems: "center", flexDirection: "row", gap: 10, marginBottom: 12 },
+  groupDot: { borderRadius: 999, height: 12, width: 12 },
+  groupText: { flex: 1, minWidth: 0 },
+  groupTitle: { fontSize: 16, fontWeight: "800" },
+  groupMeta: { fontSize: 12, fontWeight: "700", marginTop: 2 },
+  groupFooter: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", marginTop: 10 },
+  groupFooterText: { fontSize: 12, fontWeight: "700" },
+  groupFooterValue: { fontSize: 18, fontWeight: "800" },
+  groupEmpty: { alignItems: "center", borderRadius: 8, borderStyle: "dashed", borderWidth: 1, padding: 16, width: "100%" },
+  groupEmptyText: { fontSize: 13, lineHeight: 18, textAlign: "center" },
   monthlyChart: {
     flexDirection: "row",
     gap: 10,
