@@ -1,6 +1,6 @@
 export type TodoPriority = "low" | "medium" | "high";
 
-export type TodoFilter = "all" | "active" | "completed";
+export type TodoFilter = "all" | "active" | "completed" | "archived";
 
 export type Todo = {
   id: string;

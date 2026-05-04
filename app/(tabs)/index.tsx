@@ -19,7 +19,13 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import useTheme from "@/hooks/useTheme";
 import { useTodos } from "@/hooks/useTodos";
 import { Todo, TodoDraft, TodoFilter, TodoPriority } from "@/types/todo";
-import { addDays, getDueStatus, isValidDateInput, parseReminderInput, toReminderInput } from "@/utils/date";
+import {
+  addDays,
+  getDueStatus,
+  isValidDateInput,
+  parseReminderInput,
+  toReminderInput,
+} from "@/utils/date";
 import Animated, {
   FadeInDown,
   interpolate,
@@ -54,10 +60,12 @@ export default function Index() {
     toggleTodo,
     deleteTodo,
     archiveTodo,
+    unarchiveTodo,
     undoLastTodoAction,
+    clearLastTodoAction,
     lastAction,
   } = useTodos();
-  const [filter, setFilter] = useState<TodoFilter | "archived">("all");
+  const [filter, setFilter] = useState<TodoFilter>("all");
   const [query, setQuery] = useState("");
   const [quickTitle, setQuickTitle] = useState("");
   const [modalVisible, setModalVisible] = useState(false);
@@ -120,6 +128,18 @@ export default function Index() {
     setModalVisible(true);
   };
 
+  useEffect(() => {
+    if (!lastAction) {
+      return;
+    }
+
+    const timeout = setTimeout(() => {
+      clearLastTodoAction();
+    }, 5000);
+
+    return () => clearTimeout(timeout);
+  }, [lastAction, clearLastTodoAction]);
+
   const closeModal = () => {
     setModalVisible(false);
     setEditingTodo(null);
@@ -132,17 +152,26 @@ export default function Index() {
     const cleanDate = dateInput.trim();
 
     if (!title) {
-      Alert.alert("Add a title", "A task needs a short title before it can be saved.");
+      Alert.alert(
+        "Add a title",
+        "A task needs a short title before it can be saved.",
+      );
       return;
     }
 
     if (cleanDate && !isValidDateInput(cleanDate)) {
-      Alert.alert("Check the date", "Use the YYYY-MM-DD format, like 2026-05-04.");
+      Alert.alert(
+        "Check the date",
+        "Use the YYYY-MM-DD format, like 2026-05-04.",
+      );
       return;
     }
 
     if (draft.reminderAt.trim() && !parseReminderInput(draft.reminderAt)) {
-      Alert.alert("Check the reminder", "Use YYYY-MM-DD HH:MM, like 2026-05-04 18:30.");
+      Alert.alert(
+        "Check the reminder",
+        "Use YYYY-MM-DD HH:MM, like 2026-05-04 18:30.",
+      );
       return;
     }
 
@@ -184,6 +213,17 @@ export default function Index() {
     ]);
   };
 
+  const confirmUnarchive = (todo: Todo) => {
+    Alert.alert("Restore task?", todo.title, [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Restore",
+        style: "default",
+        onPress: () => unarchiveTodo(todo.id),
+      },
+    ]);
+  };
+
   const renderTodo = ({ item, index }: { item: Todo; index: number }) => {
     const due = getDueStatus(item.dueDate, item.completed);
     const priorityTone = {
@@ -215,12 +255,16 @@ export default function Index() {
             style={[
               styles.checkButton,
               {
-                backgroundColor: item.completed ? colors.success : "transparent",
+                backgroundColor: item.completed
+                  ? colors.success
+                  : "transparent",
                 borderColor: item.completed ? colors.success : colors.border,
               },
             ]}
           >
-            {item.completed ? <Ionicons color="#ffffff" name="checkmark" size={18} /> : null}
+            {item.completed ? (
+              <Ionicons color="#ffffff" name="checkmark" size={18} />
+            ) : null}
           </Pressable>
 
           <View style={styles.todoContent}>
@@ -229,18 +273,35 @@ export default function Index() {
                 numberOfLines={2}
                 style={[
                   styles.todoTitle,
-                  { color: colors.text, textDecorationLine: item.completed ? "line-through" : "none" },
+                  {
+                    color: colors.text,
+                    textDecorationLine: item.completed
+                      ? "line-through"
+                      : "none",
+                  },
                 ]}
               >
                 {item.title}
               </Text>
               <Pressable
-                accessibilityLabel={`Archive ${item.title}`}
+                accessibilityLabel={
+                  item.archived
+                    ? `Restore ${item.title}`
+                    : `Archive ${item.title}`
+                }
                 hitSlop={10}
-                onPress={() => confirmArchive(item)}
+                onPress={() =>
+                  item.archived ? confirmUnarchive(item) : confirmArchive(item)
+                }
                 style={styles.iconButton}
               >
-                <Ionicons color={colors.textMuted} name="archive-outline" size={20} />
+                <Ionicons
+                  color={colors.textMuted}
+                  name={
+                    item.archived ? "arrow-undo-outline" : "archive-outline"
+                  }
+                  size={20}
+                />
               </Pressable>
               <Pressable
                 accessibilityLabel={`Delete ${item.title}`}
@@ -248,20 +309,36 @@ export default function Index() {
                 onPress={() => confirmDelete(item)}
                 style={styles.iconButton}
               >
-                <Ionicons color={colors.textMuted} name="trash-outline" size={20} />
+                <Ionicons
+                  color={colors.textMuted}
+                  name="trash-outline"
+                  size={20}
+                />
               </Pressable>
             </View>
 
             {item.notes ? (
-              <Text numberOfLines={2} style={[styles.todoNotes, { color: colors.textMuted }]}>
+              <Text
+                numberOfLines={2}
+                style={[styles.todoNotes, { color: colors.textMuted }]}
+              >
                 {item.notes}
               </Text>
             ) : null}
 
             <View style={styles.metaRow}>
-              <View style={[styles.pill, { backgroundColor: `${priorityTone}22` }]}>
-                <View style={[styles.priorityDot, { backgroundColor: priorityTone }]} />
-                <Text style={[styles.pillText, { color: priorityTone }]}>{item.priority}</Text>
+              <View
+                style={[styles.pill, { backgroundColor: `${priorityTone}22` }]}
+              >
+                <View
+                  style={[
+                    styles.priorityDot,
+                    { backgroundColor: priorityTone },
+                  ]}
+                />
+                <Text style={[styles.pillText, { color: priorityTone }]}>
+                  {item.priority}
+                </Text>
               </View>
               <View style={[styles.pill, { backgroundColor: colors.bg }]}>
                 <Ionicons
@@ -277,18 +354,32 @@ export default function Index() {
                   name="calendar-outline"
                   size={14}
                 />
-                <Text style={[styles.pillText, { color: colors.textMuted }]}>{due.label}</Text>
+                <Text style={[styles.pillText, { color: colors.textMuted }]}>
+                  {due.label}
+                </Text>
               </View>
               {item.project ? (
                 <View style={[styles.pill, { backgroundColor: colors.bg }]}>
-                  <Ionicons color={colors.primary} name="folder-outline" size={14} />
-                  <Text style={[styles.pillText, { color: colors.textMuted }]}>{item.project}</Text>
+                  <Ionicons
+                    color={colors.primary}
+                    name="folder-outline"
+                    size={14}
+                  />
+                  <Text style={[styles.pillText, { color: colors.textMuted }]}>
+                    {item.project}
+                  </Text>
                 </View>
               ) : null}
               {item.tags.length ? (
                 <View style={[styles.pill, { backgroundColor: colors.bg }]}>
-                  <Ionicons color={colors.warning} name="pricetag-outline" size={14} />
-                  <Text style={[styles.pillText, { color: colors.textMuted }]}>{item.tags.join(", ")}</Text>
+                  <Ionicons
+                    color={colors.warning}
+                    name="pricetag-outline"
+                    size={14}
+                  />
+                  <Text style={[styles.pillText, { color: colors.textMuted }]}>
+                    {item.tags.join(", ")}
+                  </Text>
                 </View>
               ) : null}
             </View>
@@ -302,8 +393,12 @@ export default function Index() {
     <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.bg }]}>
       <View style={styles.header}>
         <View>
-          <Text style={[styles.eyebrow, { color: colors.textMuted }]}>Today</Text>
-          <Text style={[styles.title, { color: colors.text }]}>Momentum Forge</Text>
+          <Text style={[styles.eyebrow, { color: colors.textMuted }]}>
+            Today
+          </Text>
+          <Text style={[styles.title, { color: colors.text }]}>
+            Momentum Forge
+          </Text>
         </View>
         <Pressable
           accessibilityLabel="Add task"
@@ -313,11 +408,17 @@ export default function Index() {
             { backgroundColor: colors.primary, opacity: pressed ? 0.85 : 1 },
           ]}
         >
-          <Ionicons color="#ffffff" name="add" size={28} />
+          <Ionicons color="#ffffff" name="add" size={20} />
+          <Text style={styles.addButtonText}>New</Text>
         </Pressable>
       </View>
 
-      <View style={[styles.quickAdd, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+      <View
+        style={[
+          styles.quickAdd,
+          { backgroundColor: colors.surface, borderColor: colors.border },
+        ]}
+      >
         <Ionicons color={colors.primary} name="flash-outline" size={18} />
         <TextInput
           placeholder="Quick add task"
@@ -345,7 +446,10 @@ export default function Index() {
             });
             setQuickTitle("");
           }}
-          style={({ pressed }) => [styles.quickButton, { backgroundColor: colors.primary, opacity: pressed ? 0.88 : 1 }]}
+          style={({ pressed }) => [
+            styles.quickButton,
+            { backgroundColor: colors.primary, opacity: pressed ? 0.88 : 1 },
+          ]}
         >
           <Ionicons color="#ffffff" name="add" size={18} />
         </Pressable>
@@ -357,10 +461,19 @@ export default function Index() {
         <Stat label="Active" value={stats.active} color={colors.primary} />
         <Stat label="Done" value={stats.completed} color={colors.success} />
         <Stat label="Urgent" value={stats.highPriority} color={colors.danger} />
-        <Stat label="Archived" value={stats.archived} color={colors.textMuted} />
+        <Stat
+          label="Archived"
+          value={stats.archived}
+          color={colors.textMuted}
+        />
       </View>
 
-      <View style={[styles.searchBox, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+      <View
+        style={[
+          styles.searchBox,
+          { backgroundColor: colors.surface, borderColor: colors.border },
+        ]}
+      >
         <Ionicons color={colors.textMuted} name="search" size={18} />
         <TextInput
           placeholder="Search tasks"
@@ -370,20 +483,31 @@ export default function Index() {
           style={[styles.searchInput, { color: colors.text }]}
         />
         {query ? (
-          <Pressable accessibilityLabel="Clear search" onPress={() => setQuery("")}>
+          <Pressable
+            accessibilityLabel="Clear search"
+            onPress={() => setQuery("")}
+          >
             <Ionicons color={colors.textMuted} name="close-circle" size={18} />
           </Pressable>
         ) : null}
       </View>
 
-      <View style={[styles.segmented, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+      <View
+        style={[
+          styles.segmented,
+          { backgroundColor: colors.surface, borderColor: colors.border },
+        ]}
+      >
         {(["all", "active", "completed", "archived"] as const).map((item) => (
           <Pressable
             key={item}
             onPress={() => setFilter(item)}
             style={[
               styles.segment,
-              { backgroundColor: filter === item ? colors.primary : "transparent" },
+              {
+                backgroundColor:
+                  filter === item ? colors.primary : "transparent",
+              },
             ]}
           >
             <Text
@@ -399,10 +523,19 @@ export default function Index() {
       </View>
 
       {lastAction ? (
-        <View style={[styles.undoBanner, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <Text style={[styles.undoText, { color: colors.text }]}>Action saved</Text>
+        <View
+          style={[
+            styles.undoBanner,
+            { backgroundColor: colors.surface, borderColor: colors.border },
+          ]}
+        >
+          <Text style={[styles.undoText, { color: colors.text }]}>
+            {lastAction?.type === "delete" ? "Task deleted" : "Task archived"}
+          </Text>
           <Pressable onPress={undoLastTodoAction} style={styles.undoButton}>
-            <Text style={[styles.undoButtonText, { color: colors.primary }]}>Undo</Text>
+            <Text style={[styles.undoButtonText, { color: colors.primary }]}>
+              Undo
+            </Text>
           </Pressable>
         </View>
       ) : null}
@@ -415,18 +548,28 @@ export default function Index() {
         showsVerticalScrollIndicator={false}
         ListEmptyComponent={
           <View style={[styles.emptyState, { borderColor: colors.border }]}>
-            <Ionicons color={colors.textMuted} name="sparkles-outline" size={30} />
+            <Ionicons
+              color={colors.textMuted}
+              name="sparkles-outline"
+              size={30}
+            />
             <Text style={[styles.emptyTitle, { color: colors.text }]}>
               {isLoading ? "Loading tasks" : "Nothing here yet"}
             </Text>
             <Text style={[styles.emptyText, { color: colors.textMuted }]}>
-              Add a task or adjust your filters to bring your list back into view.
+              Add a task or adjust your filters to bring your list back into
+              view.
             </Text>
           </View>
         }
       />
 
-      <Modal animationType="slide" transparent visible={modalVisible} onRequestClose={closeModal}>
+      <Modal
+        animationType="slide"
+        transparent
+        visible={modalVisible}
+        onRequestClose={closeModal}
+      >
         <KeyboardAvoidingView
           behavior={Platform.OS === "ios" ? "padding" : undefined}
           style={styles.modalOverlay}
@@ -437,21 +580,34 @@ export default function Index() {
               <Text style={[styles.modalTitle, { color: colors.text }]}>
                 {editingTodo ? "Edit task" : "New task"}
               </Text>
-              <Pressable accessibilityLabel="Close modal" onPress={closeModal} style={styles.iconButton}>
+              <Pressable
+                accessibilityLabel="Close modal"
+                onPress={closeModal}
+                style={styles.iconButton}
+              >
                 <Ionicons color={colors.textMuted} name="close" size={24} />
               </Pressable>
             </View>
 
-            <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+            <ScrollView
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+            >
               <TextInput
                 autoFocus
                 placeholder="Task title"
                 placeholderTextColor={colors.textMuted}
                 value={draft.title}
-                onChangeText={(title) => setDraft((current) => ({ ...current, title }))}
+                onChangeText={(title) =>
+                  setDraft((current) => ({ ...current, title }))
+                }
                 style={[
                   styles.input,
-                  { backgroundColor: colors.backgrounds.input, borderColor: colors.border, color: colors.text },
+                  {
+                    backgroundColor: colors.backgrounds.input,
+                    borderColor: colors.border,
+                    color: colors.text,
+                  },
                 ]}
               />
               <TextInput
@@ -459,11 +615,17 @@ export default function Index() {
                 placeholder="Notes"
                 placeholderTextColor={colors.textMuted}
                 value={draft.notes}
-                onChangeText={(notes) => setDraft((current) => ({ ...current, notes }))}
+                onChangeText={(notes) =>
+                  setDraft((current) => ({ ...current, notes }))
+                }
                 style={[
                   styles.input,
                   styles.notesInput,
-                  { backgroundColor: colors.backgrounds.input, borderColor: colors.border, color: colors.text },
+                  {
+                    backgroundColor: colors.backgrounds.input,
+                    borderColor: colors.border,
+                    color: colors.text,
+                  },
                 ]}
               />
 
@@ -471,33 +633,52 @@ export default function Index() {
                 placeholder="Project"
                 placeholderTextColor={colors.textMuted}
                 value={draft.project}
-                onChangeText={(project) => setDraft((current) => ({ ...current, project }))}
+                onChangeText={(project) =>
+                  setDraft((current) => ({ ...current, project }))
+                }
                 style={[
                   styles.input,
-                  { backgroundColor: colors.backgrounds.input, borderColor: colors.border, color: colors.text },
+                  {
+                    backgroundColor: colors.backgrounds.input,
+                    borderColor: colors.border,
+                    color: colors.text,
+                  },
                 ]}
               />
               <TextInput
                 placeholder="Tags, comma separated"
                 placeholderTextColor={colors.textMuted}
                 value={draft.tags}
-                onChangeText={(tags) => setDraft((current) => ({ ...current, tags }))}
+                onChangeText={(tags) =>
+                  setDraft((current) => ({ ...current, tags }))
+                }
                 style={[
                   styles.input,
-                  { backgroundColor: colors.backgrounds.input, borderColor: colors.border, color: colors.text },
+                  {
+                    backgroundColor: colors.backgrounds.input,
+                    borderColor: colors.border,
+                    color: colors.text,
+                  },
                 ]}
               />
 
-              <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>Priority</Text>
+              <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>
+                Priority
+              </Text>
               <View style={styles.choiceRow}>
                 {priorities.map((priority) => (
                   <Pressable
                     key={priority}
-                    onPress={() => setDraft((current) => ({ ...current, priority }))}
+                    onPress={() =>
+                      setDraft((current) => ({ ...current, priority }))
+                    }
                     style={[
                       styles.choice,
                       {
-                        backgroundColor: draft.priority === priority ? colors.primary : colors.bg,
+                        backgroundColor:
+                          draft.priority === priority
+                            ? colors.primary
+                            : colors.bg,
                         borderColor: colors.border,
                       },
                     ]}
@@ -505,7 +686,12 @@ export default function Index() {
                     <Text
                       style={[
                         styles.choiceText,
-                        { color: draft.priority === priority ? "#ffffff" : colors.text },
+                        {
+                          color:
+                            draft.priority === priority
+                              ? "#ffffff"
+                              : colors.text,
+                        },
                       ]}
                     >
                       {priority}
@@ -514,33 +700,47 @@ export default function Index() {
                 ))}
               </View>
 
-              <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>Repeat</Text>
+              <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>
+                Repeat
+              </Text>
               <View style={styles.choiceRow}>
-                {(["none", "daily", "weekly", "monthly"] as const).map((repeat) => (
-                  <Pressable
-                    key={repeat}
-                    onPress={() => setDraft((current) => ({ ...current, repeat }))}
-                    style={[
-                      styles.choice,
-                      {
-                        backgroundColor: draft.repeat === repeat ? colors.primary : colors.bg,
-                        borderColor: colors.border,
-                      },
-                    ]}
-                  >
-                    <Text
+                {(["none", "daily", "weekly", "monthly"] as const).map(
+                  (repeat) => (
+                    <Pressable
+                      key={repeat}
+                      onPress={() =>
+                        setDraft((current) => ({ ...current, repeat }))
+                      }
                       style={[
-                        styles.choiceText,
-                        { color: draft.repeat === repeat ? "#ffffff" : colors.text },
+                        styles.choice,
+                        {
+                          backgroundColor:
+                            draft.repeat === repeat
+                              ? colors.primary
+                              : colors.bg,
+                          borderColor: colors.border,
+                        },
                       ]}
                     >
-                      {repeat}
-                    </Text>
-                  </Pressable>
-                ))}
+                      <Text
+                        style={[
+                          styles.choiceText,
+                          {
+                            color:
+                              draft.repeat === repeat ? "#ffffff" : colors.text,
+                          },
+                        ]}
+                      >
+                        {repeat}
+                      </Text>
+                    </Pressable>
+                  ),
+                )}
               </View>
 
-              <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>Due date</Text>
+              <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>
+                Due date
+              </Text>
               <TextInput
                 placeholder="YYYY-MM-DD"
                 placeholderTextColor={colors.textMuted}
@@ -548,53 +748,101 @@ export default function Index() {
                 onChangeText={setDateInput}
                 style={[
                   styles.input,
-                  { backgroundColor: colors.backgrounds.input, borderColor: colors.border, color: colors.text },
+                  {
+                    backgroundColor: colors.backgrounds.input,
+                    borderColor: colors.border,
+                    color: colors.text,
+                  },
                 ]}
               />
               <View style={styles.choiceRow}>
-                <DateChip label="Today" onPress={() => setDateInput(addDays(0))} />
-                <DateChip label="Tomorrow" onPress={() => setDateInput(addDays(1))} />
+                <DateChip
+                  label="Today"
+                  onPress={() => setDateInput(addDays(0))}
+                />
+                <DateChip
+                  label="Tomorrow"
+                  onPress={() => setDateInput(addDays(1))}
+                />
                 <DateChip label="No date" onPress={() => setDateInput("")} />
               </View>
 
-              <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>Reminder</Text>
+              <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>
+                Notification
+              </Text>
               <TextInput
-                placeholder="YYYY-MM-DD HH:MM"
+                placeholder="Notification time"
                 placeholderTextColor={colors.textMuted}
                 value={draft.reminderAt}
-                onChangeText={(reminderAt) => setDraft((current) => ({ ...current, reminderAt }))}
+                onChangeText={(reminderAt) =>
+                  setDraft((current) => ({ ...current, reminderAt }))
+                }
                 style={[
                   styles.input,
-                  { backgroundColor: colors.backgrounds.input, borderColor: colors.border, color: colors.text },
+                  {
+                    backgroundColor: colors.backgrounds.input,
+                    borderColor: colors.border,
+                    color: colors.text,
+                  },
                 ]}
               />
+              <Text style={[styles.helperText, { color: colors.textMuted }]}>
+                Sends a local notification at the time you choose.
+              </Text>
 
               <Pressable
                 onPress={submitDraft}
                 style={({ pressed }) => [
                   styles.saveButton,
-                  { backgroundColor: colors.primary, opacity: pressed ? 0.86 : 1 },
+                  {
+                    backgroundColor: colors.primary,
+                    opacity: pressed ? 0.86 : 1,
+                  },
                 ]}
               >
                 <Ionicons color="#ffffff" name="save-outline" size={20} />
-                <Text style={styles.saveButtonText}>{editingTodo ? "Save changes" : "Create task"}</Text>
+                <Text style={styles.saveButtonText}>
+                  {editingTodo ? "Save changes" : "Create task"}
+                </Text>
               </Pressable>
             </ScrollView>
           </View>
         </KeyboardAvoidingView>
       </Modal>
 
-      <Modal animationType="fade" transparent visible={showOnboarding} onRequestClose={() => setShowOnboarding(false)}>
+      <Modal
+        animationType="fade"
+        transparent
+        visible={showOnboarding}
+        onRequestClose={() => setShowOnboarding(false)}
+      >
         <View style={styles.onboardingOverlay}>
-          <View style={[styles.onboardingCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <Text style={[styles.onboardingTitle, { color: colors.text }]}>Welcome to Momentum Forge</Text>
+          <View
+            style={[
+              styles.onboardingCard,
+              { backgroundColor: colors.surface, borderColor: colors.border },
+            ]}
+          >
+            <Text style={[styles.onboardingTitle, { color: colors.text }]}>
+              Welcome to Momentum Forge
+            </Text>
             <Text style={[styles.onboardingBody, { color: colors.textMuted }]}>
-              Keep tasks, habits, and your daily tracker in one local-first place.
+              Keep tasks, habits, and your daily tracker in one local-first
+              place.
             </Text>
             <View style={styles.onboardingList}>
-              <OnboardingRow label="Todos" detail="Priorities, projects, tags, recurrence, and reminders." />
-              <OnboardingRow label="Habits" detail="Daily check-ins, streaks, and weekly targets." />
-              <OnboardingRow label="Tracker" detail="A GitHub-style board for the life of your app." />
+              <OnboardingRow
+                label="Todos"
+                detail="Priorities, projects, tags, recurrence, and reminders."
+              />
+              <OnboardingRow
+                label="Habits"
+                detail="Daily check-ins, streaks, and weekly targets."
+              />
+              <OnboardingRow
+                label="Tracker"
+                detail="A GitHub-style board for the life of your app."
+              />
             </View>
             <Pressable
               onPress={async () => {
@@ -603,7 +851,10 @@ export default function Index() {
               }}
               style={({ pressed }) => [
                 styles.onboardingButton,
-                { backgroundColor: colors.primary, opacity: pressed ? 0.88 : 1 },
+                {
+                  backgroundColor: colors.primary,
+                  opacity: pressed ? 0.88 : 1,
+                },
               ]}
             >
               <Text style={styles.onboardingButtonText}>Start planning</Text>
@@ -620,22 +871,43 @@ function OnboardingRow({ label, detail }: { label: string; detail: string }) {
 
   return (
     <View style={styles.onboardingRow}>
-      <View style={[styles.onboardingDot, { backgroundColor: colors.primary }]} />
+      <View
+        style={[styles.onboardingDot, { backgroundColor: colors.primary }]}
+      />
       <View style={{ flex: 1 }}>
-        <Text style={[styles.onboardingRowLabel, { color: colors.text }]}>{label}</Text>
-        <Text style={[styles.onboardingRowDetail, { color: colors.textMuted }]}>{detail}</Text>
+        <Text style={[styles.onboardingRowLabel, { color: colors.text }]}>
+          {label}
+        </Text>
+        <Text style={[styles.onboardingRowDetail, { color: colors.textMuted }]}>
+          {detail}
+        </Text>
       </View>
     </View>
   );
 }
 
-function Stat({ label, value, color }: { label: string; value: number; color: string }) {
+function Stat({
+  label,
+  value,
+  color,
+}: {
+  label: string;
+  value: number;
+  color: string;
+}) {
   const { colors } = useTheme();
 
   return (
-    <View style={[styles.stat, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+    <View
+      style={[
+        styles.stat,
+        { backgroundColor: colors.surface, borderColor: colors.border },
+      ]}
+    >
       <Text style={[styles.statValue, { color }]}>{value}</Text>
-      <Text style={[styles.statLabel, { color: colors.textMuted }]}>{label}</Text>
+      <Text style={[styles.statLabel, { color: colors.textMuted }]}>
+        {label}
+      </Text>
     </View>
   );
 }
@@ -646,7 +918,10 @@ function DateChip({ label, onPress }: { label: string; onPress: () => void }) {
   return (
     <Pressable
       onPress={onPress}
-      style={[styles.dateChip, { backgroundColor: colors.bg, borderColor: colors.border }]}
+      style={[
+        styles.dateChip,
+        { backgroundColor: colors.bg, borderColor: colors.border },
+      ]}
     >
       <Text style={[styles.dateChipText, { color: colors.text }]}>{label}</Text>
     </Pressable>
@@ -683,14 +958,24 @@ function FocusDeck({
 
   return (
     <Animated.View
-      style={[styles.focusDeck, { backgroundColor: colors.surface, borderColor: colors.border }, deckStyle]}
+      style={[
+        styles.focusDeck,
+        { backgroundColor: colors.surface, borderColor: colors.border },
+        deckStyle,
+      ]}
     >
       <View style={styles.focusDeckTop}>
         <View>
-          <Text style={[styles.focusDeckLabel, { color: colors.textMuted }]}>3D focus board</Text>
-          <Text style={[styles.focusDeckTitle, { color: colors.text }]}>Daily momentum</Text>
+          <Text style={[styles.focusDeckLabel, { color: colors.textMuted }]}>
+            3D focus board
+          </Text>
+          <Text style={[styles.focusDeckTitle, { color: colors.text }]}>
+            Daily momentum
+          </Text>
         </View>
-        <View style={[styles.focusDeckBadge, { backgroundColor: colors.primary }]} />
+        <View
+          style={[styles.focusDeckBadge, { backgroundColor: colors.primary }]}
+        />
       </View>
 
       <View style={styles.focusDeckStats}>
@@ -724,7 +1009,9 @@ function FocusDeck({
             {
               width: `${Math.max(
                 12,
-                (stats.completed / Math.max(1, stats.active + stats.completed)) * 100,
+                (stats.completed /
+                  Math.max(1, stats.active + stats.completed)) *
+                  100,
               )}%`,
               backgroundColor: colors.success,
             },
@@ -751,8 +1038,12 @@ function DeckMetric({
   return (
     <View style={styles.deckMetric}>
       <View style={[styles.deckMetricDot, { backgroundColor: color }]} />
-      <Text style={[styles.deckMetricValue, { color: textColor }]}>{value}</Text>
-      <Text style={[styles.deckMetricLabel, { color: mutedColor }]}>{label}</Text>
+      <Text style={[styles.deckMetricValue, { color: textColor }]}>
+        {value}
+      </Text>
+      <Text style={[styles.deckMetricLabel, { color: mutedColor }]}>
+        {label}
+      </Text>
     </View>
   );
 }
@@ -765,6 +1056,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     flexDirection: "row",
     justifyContent: "space-between",
+    gap: 12,
     paddingHorizontal: 20,
     paddingTop: 10,
   },
@@ -779,10 +1071,17 @@ const styles = StyleSheet.create({
   },
   addButton: {
     alignItems: "center",
-    borderRadius: 18,
-    height: 54,
+    borderRadius: 999,
+    flexDirection: "row",
+    gap: 8,
+    height: 46,
     justifyContent: "center",
-    width: 54,
+    paddingHorizontal: 16,
+  },
+  addButtonText: {
+    color: "#ffffff",
+    fontSize: 14,
+    fontWeight: "800",
   },
   statsRow: {
     flexDirection: "row",
@@ -820,7 +1119,7 @@ const styles = StyleSheet.create({
   },
   quickAdd: {
     alignItems: "center",
-    borderRadius: 8,
+    borderRadius: 12,
     borderWidth: 1,
     flexDirection: "row",
     gap: 10,
@@ -846,7 +1145,7 @@ const styles = StyleSheet.create({
     minHeight: 48,
   },
   segmented: {
-    borderRadius: 8,
+    borderRadius: 12,
     borderWidth: 1,
     flexDirection: "row",
     marginHorizontal: 20,
@@ -871,15 +1170,11 @@ const styles = StyleSheet.create({
   },
   todoCard: {
     borderLeftWidth: 4,
-    borderRadius: 8,
+    borderRadius: 12,
     flexDirection: "row",
     gap: 12,
     padding: 14,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.08,
-    shadowRadius: 16,
-    elevation: 2,
+    boxShadow: "0px 8px 20px rgba(15, 23, 42, 0.08)",
   },
   checkButton: {
     alignItems: "center",
@@ -970,7 +1265,7 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 22,
     borderTopRightRadius: 22,
     maxHeight: "88%",
-    padding: 20,
+    padding: 16,
   },
   modalHeader: {
     alignItems: "center",
@@ -983,7 +1278,7 @@ const styles = StyleSheet.create({
     fontWeight: "800",
   },
   input: {
-    borderRadius: 8,
+    borderRadius: 12,
     borderWidth: 1,
     fontSize: 16,
     marginBottom: 12,
@@ -1009,7 +1304,7 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   choice: {
-    borderRadius: 8,
+    borderRadius: 999,
     borderWidth: 1,
     paddingHorizontal: 16,
     paddingVertical: 10,
@@ -1031,7 +1326,7 @@ const styles = StyleSheet.create({
   },
   saveButton: {
     alignItems: "center",
-    borderRadius: 8,
+    borderRadius: 12,
     flexDirection: "row",
     gap: 8,
     justifyContent: "center",
@@ -1051,7 +1346,7 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   onboardingCard: {
-    borderRadius: 12,
+    borderRadius: 16,
     borderWidth: 1,
     padding: 20,
     width: "100%",
@@ -1123,7 +1418,7 @@ const styles = StyleSheet.create({
     fontWeight: "800",
   },
   focusDeck: {
-    borderRadius: 8,
+    borderRadius: 12,
     borderWidth: 1,
     marginHorizontal: 20,
     marginTop: 18,
@@ -1156,9 +1451,15 @@ const styles = StyleSheet.create({
   },
   deckMetric: {
     backgroundColor: "rgba(127,127,127,0.08)",
-    borderRadius: 8,
+    borderRadius: 12,
     flex: 1,
     padding: 12,
+  },
+  helperText: {
+    fontSize: 12,
+    lineHeight: 16,
+    marginTop: -4,
+    marginBottom: 12,
   },
   deckMetricDot: {
     borderRadius: 999,

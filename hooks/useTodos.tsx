@@ -1,5 +1,13 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { ReactNode, createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import {
+  ReactNode,
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 
 import { Todo, TodoDraft } from "@/types/todo";
 import { parseReminderInput, shiftDateByRepeat } from "@/utils/date";
@@ -46,13 +54,21 @@ const starterTodos: Todo[] = [
   },
 ];
 
-const createId = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+const createId = () =>
+  `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 
 const normalizeTodo = (
   todo: Partial<Todo> &
     Pick<
       Todo,
-      "id" | "title" | "notes" | "priority" | "completed" | "dueDate" | "createdAt" | "updatedAt"
+      | "id"
+      | "title"
+      | "notes"
+      | "priority"
+      | "completed"
+      | "dueDate"
+      | "createdAt"
+      | "updatedAt"
     >,
 ): Todo => ({
   ...todo,
@@ -150,7 +166,9 @@ function useTodosState() {
 
     if (notificationId) {
       setTodos((current) =>
-        current.map((item) => (item.id === todo.id ? { ...item, notificationId } : item)),
+        current.map((item) =>
+          item.id === todo.id ? { ...item, notificationId } : item,
+        ),
       );
     }
   }, []);
@@ -215,55 +233,66 @@ function useTodosState() {
         updatedAt: new Date().toISOString(),
       };
 
-      setTodos((current) => sortTodos(current.map((todo) => (todo.id === id ? nextTodo : todo))));
+      setTodos((current) =>
+        sortTodos(current.map((todo) => (todo.id === id ? nextTodo : todo))),
+      );
       await setNotification(nextTodo);
     },
     [setNotification, todos],
   );
 
-  const toggleTodo = useCallback((id: string) => {
-    const now = new Date().toISOString();
-    const existing = todos.find((todo) => todo.id === id);
-    if (!existing) {
-      return;
-    }
+  const toggleTodo = useCallback(
+    (id: string) => {
+      const now = new Date().toISOString();
+      const existing = todos.find((todo) => todo.id === id);
+      if (!existing) {
+        return;
+      }
 
-    const isCompleting = !existing.completed;
-    const completedTodo: Todo = {
-      ...existing,
-      completed: isCompleting,
-      completedAt: isCompleting ? now : null,
-      updatedAt: now,
-      archived: existing.archived,
-    };
-
-    const nextTodos = todos.map((todo) => (todo.id === id ? completedTodo : todo));
-
-    if (isCompleting && existing.repeat !== "none") {
-      const nextDue = shiftDateByRepeat(existing.dueDate, existing.repeat);
-      nextTodos.unshift({
+      const isCompleting = !existing.completed;
+      const completedTodo: Todo = {
         ...existing,
-        id: createId(),
-        completed: false,
-        completedAt: null,
-        dueDate: nextDue,
-        reminderAt: existing.reminderAt,
-        notificationId: null,
-        archived: false,
-        archivedAt: null,
-        createdAt: now,
+        completed: isCompleting,
+        completedAt: isCompleting ? now : null,
         updatedAt: now,
-      });
-    }
+        archived: existing.archived,
+      };
 
-    setTodos(sortTodos(nextTodos));
+      const nextTodos = todos.map((todo) =>
+        todo.id === id ? completedTodo : todo,
+      );
 
-    if (isCompleting) {
-      void clearNotification(existing);
-    } else if (existing.reminderAt) {
-      void setNotification({ ...existing, completed: false, completedAt: null });
-    }
-  }, [clearNotification, setNotification, todos]);
+      if (isCompleting && existing.repeat !== "none") {
+        const nextDue = shiftDateByRepeat(existing.dueDate, existing.repeat);
+        nextTodos.unshift({
+          ...existing,
+          id: createId(),
+          completed: false,
+          completedAt: null,
+          dueDate: nextDue,
+          reminderAt: existing.reminderAt,
+          notificationId: null,
+          archived: false,
+          archivedAt: null,
+          createdAt: now,
+          updatedAt: now,
+        });
+      }
+
+      setTodos(sortTodos(nextTodos));
+
+      if (isCompleting) {
+        void clearNotification(existing);
+      } else if (existing.reminderAt) {
+        void setNotification({
+          ...existing,
+          completed: false,
+          completedAt: null,
+        });
+      }
+    },
+    [clearNotification, setNotification, todos],
+  );
 
   const deleteTodo = useCallback(
     async (id: string) => {
@@ -294,7 +323,11 @@ function useTodosState() {
       };
 
       setLastAction({ type: "archive", todo: existing });
-      setTodos((current) => sortTodos(current.map((todo) => (todo.id === id ? archivedTodo : todo))));
+      setTodos((current) =>
+        sortTodos(
+          current.map((todo) => (todo.id === id ? archivedTodo : todo)),
+        ),
+      );
       await clearNotification(existing);
     },
     [clearNotification, todos],
@@ -336,6 +369,10 @@ function useTodosState() {
     setLastAction(null);
   }, [lastAction, setNotification, unarchiveTodo]);
 
+  const clearLastTodoAction = useCallback(() => {
+    setLastAction(null);
+  }, []);
+
   const clearCompleted = useCallback(async () => {
     const completedTodos = todos.filter((todo) => todo.completed);
     for (const todo of completedTodos) {
@@ -359,13 +396,18 @@ function useTodosState() {
     const completed = activeTodos.filter((todo) => todo.completed).length;
     const active = activeTodos.filter((todo) => !todo.completed).length;
     const archived = todos.filter((todo) => todo.archived).length;
-    const highPriority = activeTodos.filter((todo) => !todo.completed && todo.priority === "high").length;
+    const highPriority = activeTodos.filter(
+      (todo) => !todo.completed && todo.priority === "high",
+    ).length;
     const overdue = activeTodos.filter((todo) => {
       if (!todo.dueDate || todo.completed) {
         return false;
       }
 
-      return new Date(`${todo.dueDate}T00:00:00`) < new Date(new Date().toDateString());
+      return (
+        new Date(`${todo.dueDate}T00:00:00`) <
+        new Date(new Date().toDateString())
+      );
     }).length;
 
     const dueSoon = activeTodos.filter((todo) => {
@@ -375,11 +417,22 @@ function useTodosState() {
 
       const due = new Date(`${todo.dueDate}T00:00:00`);
       const today = new Date();
-      const diff = Math.round((due.getTime() - new Date(today.toDateString()).getTime()) / (24 * 60 * 60 * 1000));
+      const diff = Math.round(
+        (due.getTime() - new Date(today.toDateString()).getTime()) /
+          (24 * 60 * 60 * 1000),
+      );
       return diff >= 0 && diff <= 2;
     }).length;
 
-    return { total: activeTodos.length, completed, active, archived, highPriority, overdue, dueSoon };
+    return {
+      total: activeTodos.length,
+      completed,
+      active,
+      archived,
+      highPriority,
+      overdue,
+      dueSoon,
+    };
   }, [todos]);
 
   return {
@@ -393,6 +446,7 @@ function useTodosState() {
     deleteTodo,
     archiveTodo,
     unarchiveTodo,
+    clearLastTodoAction,
     undoLastTodoAction,
     clearCompleted,
     resetTodos,
